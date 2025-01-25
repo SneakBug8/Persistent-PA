@@ -1395,7 +1395,7 @@ void send_and_receive_commands(sys::state& state) {
 
 		// send the commands of the server to all the clients
 		auto* c = state.network_state.outgoing_commands.front();
-		while(c) {
+		/*while(c) {
 			if(!command::is_console_command(c->type)) {
 				// Generate checksum on the spot
 				if(c->type == command::command_type::advance_tick) {
@@ -1412,8 +1412,29 @@ void send_and_receive_commands(sys::state& state) {
 			}
 			state.network_state.outgoing_commands.pop();
 			c = state.network_state.outgoing_commands.front();
+		}*/
+		while(c) {
+			command::execute_command(state, *c);
+			for(auto& client : state.network_state.clients) {
+				if(client.is_active() && (c->source == client.playing_as || c->source == state.local_player_nation)) {
+#ifndef NDEBUG
+					state.console_log("host:send:cmd | from: " + std::to_string(c->source.index()) + " | type:" + readableCommandTypes[(uint32_t(c->type))] +
+					" | to: " + std::to_string(client.playing_as.index()));
+#endif
+					socket_add_to_send_queue(client.send_buffer, &c, sizeof(c));
+				}
+				else if (client.is_active()) {
+#ifndef NDEBUG
+					state.console_log("host:filteredout:cmd | from " + std::to_string(c->source.index()) + " | type:" + readableCommandTypes[(uint32_t(c->type))] +
+					" | to: " + std::to_string(client.playing_as.index()));
+#endif
+				}
+			}
+			command_executed = true;
+			state.network_state.outgoing_commands.pop();
+			c = state.network_state.outgoing_commands.front();
 		}
-
+		
 		// Clear lost sockets
 		if(state.current_date.to_ymd(state.start_date).day == 1 || state.cheat_data.daily_oos_check) {
 			for(auto& client : state.network_state.clients) {
@@ -1512,7 +1533,6 @@ void send_and_receive_commands(sys::state& state) {
 		} else {
 			// receive commands from the server and immediately execute them
 			int r = socket_recv(state.network_state.socket_fd, &state.network_state.recv_buffer, sizeof(state.network_state.recv_buffer), &state.network_state.recv_count, [&]() {
-
 #ifndef NDEBUG
 				state.console_log("client:recv:cmd | from:" + std::to_string(state.network_state.recv_buffer.source.index()) + "type:" + readableCommandTypes[uint32_t(state.network_state.recv_buffer.type)]);
 #endif
@@ -1571,6 +1591,17 @@ void send_and_receive_commands(sys::state& state) {
 			state.network_state.reported_oos = true;
 		}
 		state.game_state_updated.store(true, std::memory_order::release);
+	}
+}
+
+void advance_tick(sys::state& state) {
+	if(state.host_settings.alice_turn_based != 0) {
+		for(int i = 0; i < state.host_settings.alice_days_per_turn; i++) {
+			command::advance_tick(state, state.local_player_nation);
+		}
+		network::full_reset_after_oos(state);
+	} else {
+		command::advance_tick(state, state.local_player_nation);
 	}
 }
 
@@ -1712,6 +1743,8 @@ state.host_settings.y = data[x]
 		HS_LOAD("alice_place_ai_upon_disconnection", alice_place_ai_upon_disconnection);
 		HS_LOAD("alice_persistent_server_pause", alice_persistent_server_pause);
 		HS_LOAD("alice_persistent_server_unpause", alice_persistent_server_unpause);
+		HS_LOAD("alice_turn_based", alice_turn_based);
+		HS_LOAD("alice_days_per_turn", alice_days_per_turn);
 	}
 }
 
@@ -1732,6 +1765,9 @@ data[x] = state.host_settings.y
 		HS_SAVE("alice_place_ai_upon_disconnection", alice_place_ai_upon_disconnection);
 		HS_SAVE("alice_persistent_server_pause", alice_persistent_server_pause);
 		HS_SAVE("alice_persistent_server_unpause", alice_persistent_server_unpause);
+		HS_SAVE("alice_turn_based", alice_turn_based);
+		HS_SAVE("alice_days_per_turn", alice_days_per_turn);
+
 
 		std::string res = data.dump();
 

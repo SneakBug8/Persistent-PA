@@ -4582,7 +4582,7 @@ void state::game_loop() {
 				if(speed >= 5 || ms_count >= game_speed[speed]) { /*enough time has passed*/
 					last_update = entry_time;
 					if(network_mode == sys::network_mode_type::host) {
-						command::advance_tick(*this, local_player_nation);
+						network::advance_tick(*this);
 					} else {
 						std::lock_guard l{ ugly_ui_game_interaction_hack };
 						single_game_tick();

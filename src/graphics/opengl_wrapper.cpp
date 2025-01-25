@@ -190,11 +190,11 @@ void initialize_framebuffer_for_province_indices(sys::state& state, int32_t size
 
 	// framebuffer
 	glGenFramebuffers(1, &state.open_gl.province_map_framebuffer);
-	state.console_log(ogl::opengl_get_error_name(glGetError()));
+	//state.console_log(ogl::opengl_get_error_name(glGetError()));
 	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, state.open_gl.province_map_framebuffer);
-	state.console_log(ogl::opengl_get_error_name(glGetError()));
+	//state.console_log(ogl::opengl_get_error_name(glGetError()));
 	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, state.open_gl.province_map_rendertexture, 0);
-	state.console_log(ogl::opengl_get_error_name(glGetError()));
+	//state.console_log(ogl::opengl_get_error_name(glGetError()));
 
 	// drawbuffers
 	GLenum DrawBuffers[1] = { GL_COLOR_ATTACHMENT0 };
@@ -203,9 +203,9 @@ void initialize_framebuffer_for_province_indices(sys::state& state, int32_t size
 	auto check = glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER);
 
 	if(check != GL_FRAMEBUFFER_COMPLETE) {
-		state.console_log(ogl::framebuffer_error(check));
+		// state.console_log(ogl::framebuffer_error(check));
 	} else {
-		state.console_log("provincial framebuffer is ready");
+		// state.console_log("provincial framebuffer is ready");
 	}
 }
 
