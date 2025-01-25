@@ -4032,8 +4032,8 @@ void update_pop_consumption(
 	});
 
 #ifndef NDEBUG
-	std::string debug_output = "Total pops spendings on needs: " + std::to_string(total_spendings.reduce());
-	state.console_log(debug_output);
+	// std::string debug_output = "Total pops spendings on needs: " + std::to_string(total_spendings.reduce());
+	// state.console_log(debug_output);
 #endif // !NDEBUG
 
 	// iterate over all (market,pop type,trade good) pairs to finalise this calculation
@@ -7063,11 +7063,11 @@ void daily_update(sys::state& state, bool presimulation, float presimulation_sta
 	};
 
 #ifndef NDEBUG
-	state.console_log("Total pops trade income: " + std::to_string(total_trade_income));
-	state.console_log("Total artisans income: " + std::to_string(total_artisan_income));
-	state.console_log("Total wages income: " + std::to_string(total_wages));
-	state.console_log("Total capitalists income: " + std::to_string(total_factory_owner_income));
-	state.console_log("Total rgo owners income: " + std::to_string(total_rgo_owner_income));
+	// state.console_log("Total pops trade income: " + std::to_string(total_trade_income));
+	// state.console_log("Total artisans income: " + std::to_string(total_artisan_income));
+	// state.console_log("Total wages income: " + std::to_string(total_wages));
+	// state.console_log("Total capitalists income: " + std::to_string(total_factory_owner_income));
+	// state.console_log("Total rgo owners income: " + std::to_string(total_rgo_owner_income));
 #endif
 
 	state.world.execute_serial_over_market([&](auto ids) {

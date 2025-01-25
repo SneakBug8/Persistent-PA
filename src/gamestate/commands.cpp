@@ -5389,7 +5389,7 @@ void notify_player_oos(sys::state& state, dcon::nation_id source) {
 	network::log_player_nations(state);
 }
 void execute_notify_player_oos(sys::state& state, dcon::nation_id source) {
-	state.actual_game_speed = 0; //pause host immediately
+	network::pause_game(state); //pause host immediately
 	state.debug_save_oos_dump();
 
 	network::log_player_nations(state);
@@ -5411,6 +5411,7 @@ void execute_notify_player_oos(sys::state& state, dcon::nation_id source) {
 		// Send new save to all clients
 		network::full_reset_after_oos(state);
 	}
+	network::unpause_game(state);
 }
 
 void advance_tick(sys::state& state, dcon::nation_id source) {
