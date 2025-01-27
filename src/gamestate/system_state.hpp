@@ -645,6 +645,7 @@ struct alignas(64) state {
 	std::atomic<bool> ui_pause = false;                              // force pause by an important message being open
 	std::atomic<bool> railroad_built = true; // game state -> map
 	std::atomic<bool> update_trade_flow = true;
+	std::atomic<bool> ui_freeze = false;
 
 	// synchronization: notifications from the gamestate to ui
 	rigtorp::SPSCQueue<event::pending_human_n_event> new_n_event;

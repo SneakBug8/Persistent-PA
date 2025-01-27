@@ -1334,6 +1334,8 @@ void write_network_save(sys::state& state) {
 	/* A save lock will be set when we load a save, naturally loading a save implies
 	that we have done preload/fill_unsaved so we will skip doing that again, to save a
 	bit of sanity on our miserable CPU */
+	state.ui_freeze.store(true, std::memory_order_release);
+
 	size_t length = sizeof_save_section(state);
 	auto save_buffer = std::unique_ptr<uint8_t[]>(new uint8_t[length]);
 	/* Clear the player nation since it is part of the savegame */
@@ -1361,6 +1363,8 @@ void write_network_save(sys::state& state) {
 		state.world.nation_set_is_player_controlled(n, true);
 	state.local_player_nation = old_local_player_nation;
 	assert(state.world.nation_get_is_player_controlled(state.local_player_nation));
+
+	state.ui_freeze.store(false, std::memory_order_release);
 }
 
 void broadcast_save_to_clients(sys::state& state, command::payload& c, uint8_t const* buffer, uint32_t length, sys::checksum_key const& k) {

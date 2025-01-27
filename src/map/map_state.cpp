@@ -1389,16 +1389,18 @@ void map_state::update(sys::state& state) {
 	if(last_update_time == std::chrono::time_point<std::chrono::steady_clock>{})
 		last_update_time = now;
 
-	if(state.selected_trade_good && state.update_trade_flow.load(std::memory_order::acquire)) {
-		update_trade_flow_arrows(state, map_data);
-		state.update_trade_flow.store(false, std::memory_order_release);
-	}
-	update_unit_arrows(state, map_data);	
+	if(!state.ui_freeze.load(std::memory_order_acquire)) {
+		if(state.selected_trade_good && state.update_trade_flow.load(std::memory_order::acquire)) {
+			update_trade_flow_arrows(state, map_data);
+			state.update_trade_flow.store(false, std::memory_order_release);
+		}
+		update_unit_arrows(state, map_data);
 
-	// Update railroads, only if railroads are being built and we have 'em enabled
-	if(state.user_settings.railroads_enabled && state.railroad_built.load(std::memory_order::acquire)) {
-		state.map_state.map_data.update_railroad_paths(state);
-		state.railroad_built.store(false, std::memory_order::release);
+		// Update railroads, only if railroads are being built and we have 'em enabled
+		if(state.user_settings.railroads_enabled && state.railroad_built.load(std::memory_order::acquire)) {
+			state.map_state.map_data.update_railroad_paths(state);
+			state.railroad_built.store(false, std::memory_order::release);
+		}
 	}
 
 	auto microseconds_since_last_update = std::chrono::duration_cast<std::chrono::microseconds>(now - last_update_time);

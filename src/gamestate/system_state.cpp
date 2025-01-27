@@ -473,19 +473,21 @@ void state::render() { // called to render the frame may (and should) delay retu
 	if(!current_scene.get_root)
 		return;
 
-	auto game_state_was_updated = game_state_updated.exchange(false, std::memory_order::acq_rel);
-	if(game_state_was_updated && !current_scene.starting_scene && !ui_state.lazy_load_in_game) {
+	auto uifreeze = ui_freeze.load(std::memory_order::acquire);
+
+	auto game_state_was_updated =  game_state_updated.exchange(false, std::memory_order::acq_rel);
+	if(!uifreeze && game_state_was_updated && !current_scene.starting_scene && !ui_state.lazy_load_in_game) {
 		window::change_cursor(*this, window::cursor_type::busy);
 		ui::create_in_game_windows(*this);
 		window::change_cursor(*this, window::cursor_type::normal);
 	}
 	auto ownership_update = province_ownership_changed.exchange(false, std::memory_order::acq_rel);
-	if(ownership_update) {
+	if(!uifreeze && ownership_update) {
 		if(user_settings.map_label != sys::map_label_mode::none) {
 			map::update_text_lines(*this, map_state.map_data);
 		}
 	}
-	if(game_state_was_updated) {
+	if(!uifreeze && game_state_was_updated) {
 		map_state.map_data.update_fog_of_war(*this);
 	}
 
@@ -1075,6 +1077,11 @@ void state::render() { // called to render the frame may (and should) delay retu
 	current_scene.render_map(*this);
 
 	//UI rendering
+
+	if(uifreeze) {
+		return;
+	}
+
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glUseProgram(open_gl.ui_shader_program);
@@ -3768,6 +3775,7 @@ void state::fill_unsaved_data() { // reconstructs derived values that are not di
 	//
 	// clear any pending messages from previously loaded saves
 	//
+	// TODO: doesn't remove already displayed events
 
 	new_n_event.~SPSCQueue();
 	new (&new_n_event) rigtorp::SPSCQueue<event::pending_human_n_event>(1024);
@@ -3781,6 +3789,7 @@ void state::fill_unsaved_data() { // reconstructs derived values that are not di
 	new_requests.~SPSCQueue();
 	new (&new_requests) rigtorp::SPSCQueue<diplomatic_message::message>(256);
 
+	ui::hide_event_windows(*this);
 
 	if(local_player_nation) {
 		world.nation_set_is_player_controlled(local_player_nation, true);
