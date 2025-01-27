@@ -3789,8 +3789,6 @@ void state::fill_unsaved_data() { // reconstructs derived values that are not di
 	new_requests.~SPSCQueue();
 	new (&new_requests) rigtorp::SPSCQueue<diplomatic_message::message>(256);
 
-	ui::hide_event_windows(*this);
-
 	if(local_player_nation) {
 		world.nation_set_is_player_controlled(local_player_nation, true);
 		// reshow pending events, messages, etc
