@@ -1636,13 +1636,15 @@ void send_and_receive_commands(sys::state& state) {
 
 void advance_tick(sys::state& state) {
 	if(state.host_settings.alice_turn_based != 0) {
+		state.ui_freeze.store(true, std::memory_order_release);
+
 		for(int i = 0; i < state.host_settings.alice_days_per_turn; i++) {
 			state.single_game_tick();
 		}
 		network::write_network_save(state);
-		pause_game(state);
 		broadcast_savegame(state);
-		unpause_game(state);
+
+		state.ui_freeze.store(false, std::memory_order_release);
 	} else {
 		command::advance_tick(state, state.local_player_nation);
 	}
@@ -1773,9 +1775,6 @@ void load_host_settings(sys::state& state) {
 		auto content = view_contents(*settings_file);
 		json data = json::parse(content.data);
 
-		if(!data["alice_expose_webui"].empty()) \
-			state.host_settings.alice_expose_webui = data["alice_expose_webui"];
-
 #define HS_LOAD(x, y) \
 if(!data[x].empty()) \
 state.host_settings.y = data[x]
@@ -1792,10 +1791,10 @@ state.host_settings.y = data[x]
 }
 
 // Used primarily to create JSON file with default values
-void save_host_settings(sys::state& state) {
+void save_host_settings(sys::state& state, bool update) {
 	auto settings_location = simple_fs::get_or_create_settings_directory();
 	auto settings_file = open_file(settings_location, NATIVE("host_settings.json"));
-	if(!settings_file) {
+	if(!settings_file || update) {
 
 #define HS_SAVE(x, y) \
 data[x] = state.host_settings.y
@@ -1810,7 +1809,6 @@ data[x] = state.host_settings.y
 		HS_SAVE("alice_persistent_server_unpause", alice_persistent_server_unpause);
 		HS_SAVE("alice_turn_based", alice_turn_based);
 		HS_SAVE("alice_days_per_turn", alice_days_per_turn);
-
 
 		std::string res = data.dump();
 

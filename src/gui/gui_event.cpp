@@ -1126,20 +1126,77 @@ message_result base_event_window::get(sys::state& state, Cyto::Any& payload) noe
 }
 
 void base_event_window::on_update(sys::state& state) noexcept {
+	// 1 - hide expired event windows
+	// 2 - hide no longer applicable event windows (on reload for example)
 	if(std::holds_alternative<event::pending_human_n_event>(event_data)) {
-		if(std::get<event::pending_human_n_event>(event_data).date + (int32_t)state.defines.alice_event_taken_auto_days <= state.current_date) {
+		auto ev = std::get<event::pending_human_n_event>(event_data);
+		if(ev.date + (int32_t)state.defines.alice_event_taken_auto_days <= state.current_date) {
+			pending_closure.push_back(this);
+		}
+
+		auto found = false;
+		for(auto aev : state.pending_n_event) {
+			if(aev.e == ev.e && aev.date == ev.date) {
+				found = true;
+				return;
+			}
+		}
+
+		if(!found) {
 			pending_closure.push_back(this);
 		}
 	} else if(std::holds_alternative<event::pending_human_f_n_event>(event_data)) {
-		if(std::get<event::pending_human_f_n_event>(event_data).date + (int32_t)state.defines.alice_event_taken_auto_days <= state.current_date) {
+		auto ev = std::get<event::pending_human_f_n_event>(event_data);
+
+		if(ev.date + (int32_t)state.defines.alice_event_taken_auto_days <= state.current_date) {
+			pending_closure.push_back(this);
+		}
+
+		auto found = false;
+		for(auto aev : state.pending_f_n_event) {
+			if(aev.e == ev.e && aev.date == ev.date) {
+				found = true;
+				return;
+			}
+		}
+
+		if(!found) {
 			pending_closure.push_back(this);
 		}
 	} else if(std::holds_alternative<event::pending_human_p_event>(event_data)) {
-		if(std::get<event::pending_human_p_event>(event_data).date + (int32_t)state.defines.alice_event_taken_auto_days <= state.current_date) {
+		auto ev = std::get<event::pending_human_p_event>(event_data);
+
+		if(ev.date + (int32_t)state.defines.alice_event_taken_auto_days <= state.current_date) {
+			pending_closure.push_back(this);
+		}
+
+		auto found = false;
+		for(auto aev : state.pending_p_event) {
+			if(aev.e == ev.e && aev.date == ev.date && aev.p == ev.p) {
+				found = true;
+				return;
+			}
+		}
+
+		if(!found) {
 			pending_closure.push_back(this);
 		}
 	} else if(std::holds_alternative<event::pending_human_f_p_event>(event_data)) {
-		if(std::get<event::pending_human_f_p_event>(event_data).date + (int32_t)state.defines.alice_event_taken_auto_days <= state.current_date) {
+		auto ev = std::get<event::pending_human_f_p_event>(event_data);
+
+		if(ev.date + (int32_t)state.defines.alice_event_taken_auto_days <= state.current_date) {
+			pending_closure.push_back(this);
+		}
+
+		auto found = false;
+		for(auto aev : state.pending_f_p_event) {
+			if(aev.e == ev.e && aev.date == ev.date && aev.p == ev.p) {
+				found = true;
+				return;
+			}
+		}
+
+		if(!found) {
 			pending_closure.push_back(this);
 		}
 	}

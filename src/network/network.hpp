@@ -134,7 +134,7 @@ void notify_player_joins(sys::state& state, network::client_data& client);
 void notify_player_joins(sys::state& state, sys::player_name name, dcon::nation_id nation);
 
 void load_host_settings(sys::state& state);
-void save_host_settings(sys::state& state);
+void save_host_settings(sys::state& state, bool update = false);
 
 class port_forwarder {
 private:

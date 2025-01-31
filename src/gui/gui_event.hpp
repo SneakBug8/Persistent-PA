@@ -209,5 +209,6 @@ void close_expired_event_windows(sys::state& state);
 void clear_event_windows(sys::state& state);
 bool events_pause_test(sys::state& state);
 void new_event_window(sys::state& state, event_data_wrapper dat);
+void hide_event_windows(sys::state& state);
 
 } // namespace ui
