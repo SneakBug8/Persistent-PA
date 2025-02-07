@@ -880,7 +880,7 @@ void init(sys::state& state) {
 static uint8_t* write_network_compressed_section(uint8_t* ptr_out, uint8_t const* ptr_in, uint32_t uncompressed_size) {
 	uint32_t decompressed_length = uncompressed_size;
 	uint32_t section_length = uint32_t(ZSTD_compress(ptr_out + sizeof(uint32_t) * 2, ZSTD_compressBound(uncompressed_size), ptr_in,
-		uncompressed_size, ZSTD_maxCLevel())); // write compressed data
+		uncompressed_size, ZSTD_minCLevel())); // write compressed data
 	memcpy(ptr_out, &section_length, sizeof(uint32_t));
 	memcpy(ptr_out + sizeof(uint32_t), &decompressed_length, sizeof(uint32_t));
 	return ptr_out + sizeof(uint32_t) * 2 + section_length;
@@ -991,13 +991,13 @@ void broadcast_savegame(sys::state& state) {
 			c.data.notify_save_loaded.target = client.playing_as;
 			c.data.notify_save_loaded.checksum = state.network_state.current_save_checksum;
 			/* Reset date for lag detection */
-			client.last_seen = state.current_date;
+			// client.last_seen = state.current_date;
 			/* And then we have to first send the command payload itself */
 			client.save_stream_size = size_t(state.network_state.current_save_length);
 			c.data.notify_save_loaded.length = size_t(state.network_state.current_save_length);
 			socket_add_to_send_queue(client.send_buffer, &c, sizeof(c));
 #ifndef NDEBUG
-					state.console_log("host:send:cmd | (new->save_loaded) | to: " + std::to_string(client.playing_as.index()) +
+					state.console_log("host:send:cmd | type:notify_save_loaded | to: " + std::to_string(client.playing_as.index()) +
 						" | checksum: " + sha512.hash(state.network_state.current_save_checksum.to_char()));
 					log_player_nations(state);
 #endif
@@ -1009,14 +1009,14 @@ void broadcast_savegame(sys::state& state) {
 #endif
 		}
 
-		/* Reload clients */
-		std::vector<dcon::nation_id> players;
+		// Reload clients
+		/*std::vector<dcon::nation_id> players;
 		for(const auto n : state.world.in_nation)
 			if(state.world.nation_get_is_player_controlled(n))
 				players.push_back(n);
 		dcon::nation_id old_local_player_nation = state.local_player_nation;
 		state.local_player_nation = dcon::nation_id{ };
-		/* Then reload as if we loaded the save data */
+		// Then reload as if we loaded the save data
 		state.preload();
 		with_network_decompressed_section(state.network_state.current_save_buffer.get(), [&state](uint8_t const* ptr_in, uint32_t length) {
 			read_save_section(ptr_in, ptr_in + length, state);
@@ -1026,6 +1026,7 @@ void broadcast_savegame(sys::state& state) {
 			state.world.nation_set_is_player_controlled(n, true);
 		state.local_player_nation = old_local_player_nation;
 		assert(state.world.nation_get_is_player_controlled(state.local_player_nation));
+		*/
 	}
 }
 

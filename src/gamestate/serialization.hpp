@@ -196,9 +196,9 @@ uint8_t* write_compressed_section(uint8_t* ptr_out, uint8_t const* ptr_in, uint3
 
 // Note: these functions are for read / writing the *uncompressed* data
 uint8_t const* read_scenario_section(uint8_t const* ptr_in, uint8_t const* section_end, sys::state& state);
-uint8_t const* read_save_section(uint8_t const* ptr_in, uint8_t const* section_end, sys::state& state);
+uint8_t const* read_save_section(uint8_t const* ptr_in, uint8_t const* section_end, sys::state& state, bool network_save = false);
 uint8_t* write_scenario_section(uint8_t* ptr_in, sys::state& state);
-uint8_t* write_save_section(uint8_t* ptr_in, sys::state& state);
+uint8_t* write_save_section(uint8_t* ptr_in, sys::state& state, bool network_save = false);
 struct scenario_size {
 	size_t total_size;
 	size_t checksum_offset;

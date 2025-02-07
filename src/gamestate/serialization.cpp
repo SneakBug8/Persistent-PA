@@ -671,11 +671,13 @@ scenario_size sizeof_scenario_section(sys::state& state) {
 	return scenario_size{ sz + szb, sz };
 }
 
-uint8_t const* read_save_section(uint8_t const* ptr_in, uint8_t const* section_end, sys::state& state) {
+uint8_t const* read_save_section(uint8_t const* ptr_in, uint8_t const* section_end, sys::state& state, bool network_save) {
 	// hand-written contribution
 	ptr_in = deserialize(ptr_in, state.unit_names);
 	ptr_in = deserialize(ptr_in, state.unit_names_indices);
-	ptr_in = memcpy_deserialize(ptr_in, state.local_player_nation);
+	if(!network_save) {
+		ptr_in = memcpy_deserialize(ptr_in, state.local_player_nation);
+	}
 	ptr_in = memcpy_deserialize(ptr_in, state.current_date);
 	ptr_in = memcpy_deserialize(ptr_in, state.game_seed);
 	ptr_in = memcpy_deserialize(ptr_in, state.current_crisis_state);
@@ -724,11 +726,13 @@ uint8_t const* read_save_section(uint8_t const* ptr_in, uint8_t const* section_e
 	return section_end;
 }
 
-uint8_t* write_save_section(uint8_t* ptr_in, sys::state& state) {
+uint8_t* write_save_section(uint8_t* ptr_in, sys::state& state, bool network_save) {
 	// hand-written contribution
 	ptr_in = serialize(ptr_in, state.unit_names);
 	ptr_in = serialize(ptr_in, state.unit_names_indices);
-	ptr_in = memcpy_serialize(ptr_in, state.local_player_nation);
+	if(!network_save) {
+		ptr_in = memcpy_serialize(ptr_in, state.local_player_nation);
+	}
 	ptr_in = memcpy_serialize(ptr_in, state.current_date);
 	ptr_in = memcpy_serialize(ptr_in, state.game_seed);
 	ptr_in = memcpy_serialize(ptr_in, state.current_crisis_state);

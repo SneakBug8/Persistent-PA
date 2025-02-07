@@ -4587,13 +4587,13 @@ void state::game_loop() {
 				auto entry_time = std::chrono::steady_clock::now();
 				auto ms_count = std::chrono::duration_cast<std::chrono::milliseconds>(entry_time - last_update).count();
 				if(speed >= 5 || ms_count >= game_speed[speed]) { /*enough time has passed*/
-					last_update = entry_time;
 					if(network_mode == sys::network_mode_type::host) {
 						network::advance_tick(*this);
 					} else {
 						std::lock_guard l{ ugly_ui_game_interaction_hack };
 						single_game_tick();
 					}
+					last_update = entry_time;
 				} else {
 					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				}
