@@ -3,6 +3,8 @@
 #include "rebels.hpp"
 #include "commands.hpp"
 #include "unit_tooltip.hpp"
+#include "economy_production.hpp"
+#include "economy_stats.hpp"
 
 namespace ui {
 
@@ -47,15 +49,48 @@ void country_name_box(sys::state& state, text::columnar_layout& contents, dcon::
 	auto box = text::open_layout_box(contents);
 
 	if(state.cheat_data.show_province_id_tooltip) {
+		auto provid = state.world.province_get_provid(prov);
+		auto sid = fat.get_state_membership();
+		auto sdid = fat.get_state_from_abstract_state_membership();
 		text::localised_format_box(state, contents, box, "province_id", text::substitution_map{});
 		text::add_to_layout_box(state, contents, box, std::string_view(":"));
 		text::add_space_to_layout_box(state, contents, box);
 		text::add_to_layout_box(state, contents, box, prov.index());
 		text::add_line_break_to_layout_box(state, contents, box);
+		text::localised_format_box(state, contents, box, "state_id", text::substitution_map{});
+		text::add_to_layout_box(state, contents, box, std::string_view(":"));
+		text::add_space_to_layout_box(state, contents, box);
+		text::add_to_layout_box(state, contents, box, sid.id.index());
+		text::add_line_break_to_layout_box(state, contents, box);
+		text::localised_format_box(state, contents, box, "state_definition_id", text::substitution_map{});
+		text::add_to_layout_box(state, contents, box, std::string_view(":"));
+		text::add_space_to_layout_box(state, contents, box);
+		text::add_to_layout_box(state, contents, box, sdid.id.index());
+		text::add_line_break_to_layout_box(state, contents, box);
+		text::localised_format_box(state, contents, box, "provid", text::substitution_map{});
+		text::add_to_layout_box(state, contents, box, std::string_view(":"));
+		text::add_space_to_layout_box(state, contents, box);
+		text::add_to_layout_box(state, contents, box, provid);
+		text::add_line_break_to_layout_box(state, contents, box);
+		text::localised_format_box(state, contents, box, "state", text::substitution_map{});
+		text::add_to_layout_box(state, contents, box, std::string_view(":"));
+		text::add_space_to_layout_box(state, contents, box);
+		text::add_to_layout_box(state, contents, box, sid.id);
+		text::add_line_break_to_layout_box(state, contents, box);
+		text::localised_format_box(state, contents, box, "state_definition", text::substitution_map{});
+		text::add_to_layout_box(state, contents, box, std::string_view(":"));
+		text::add_space_to_layout_box(state, contents, box);
+		text::add_to_layout_box(state, contents, box, sdid.id);
+		text::add_line_break_to_layout_box(state, contents, box);
 		text::localised_format_box(state, contents, box, "nation_tag", text::substitution_map{});
 		text::add_to_layout_box(state, contents, box, std::string_view(":"));
 		text::add_space_to_layout_box(state, contents, box);
 		text::add_to_layout_box(state, contents, box, nations::int_to_tag(owner.get_identity_from_identity_holder().get_identifying_int()));
+		text::add_line_break_to_layout_box(state, contents, box);
+		text::localised_format_box(state, contents, box, "nation_id", text::substitution_map{});
+		text::add_to_layout_box(state, contents, box, std::string_view(":"));
+		text::add_space_to_layout_box(state, contents, box);
+		text::add_to_layout_box(state, contents, box, owner.id.value);
 		text::add_line_break_to_layout_box(state, contents, box);
 		text::localised_format_box(state, contents, box, "province_sorting_distance", text::substitution_map{});
 		text::add_to_layout_box(state, contents, box, std::string_view(":"));
@@ -842,7 +877,16 @@ void crisis_map_tt_box(sys::state& state, text::columnar_layout& contents, dcon:
 
 	if(prov.value < state.province_definitions.first_sea_province.value) {
 		auto box = text::open_layout_box(contents);
-		text::localised_single_sub_box(state, contents, box, std::string_view("flashpoint_tension"), text::variable_type::value, std::to_string(int32_t(fat.get_state_membership().get_flashpoint_tension())));
+		{
+			text::substitution_map sub;
+			text::add_to_substitution_map(sub, text::variable_type::value, text::fp_percentage_one_place{ fat.get_state_membership().get_flashpoint_tension() });
+			text::localised_format_box(state, contents, box, std::string_view("flashpoint_tension"), sub);
+		}
+		{
+			text::substitution_map sub;
+			text::add_to_substitution_map(sub, text::variable_type::val, text::fp_percentage_one_place{ fat.get_state_from_abstract_state_membership().get_colonization_temperature() / 100.f });
+			text::localised_format_box(state, contents, box, std::string_view("province_colonisation_temperature"), sub);
+		}
 		text::close_layout_box(contents, box);
 	}
 }
@@ -1056,24 +1100,19 @@ void factory_map_tt_box(sys::state& state, text::columnar_layout& contents, dcon
 		text::localised_single_sub_box(state, contents, box, std::string_view("mapmode_tooltip_factory_count"), text::variable_type::state, text::get_province_state_name(state, prov));
 
 		std::vector<dcon::factory_fat_id> factories;
-		int32_t totallevels = 0;
-		for(auto m : fat.get_state_from_abstract_state_membership().get_abstract_state_membership()) {
-			auto p = m.get_province();
-			if(p.get_nation_from_province_ownership() == fat.get_nation_from_province_ownership()) {
-				for(auto f : p.get_factory_location()) {
-					factories.push_back(f.get_factory());
-					totallevels += f.get_factory().get_level();
-				}
-			}
+		float totallevels = 0;
+		for(auto f : state.world.province_get_factory_location(prov)) {
+			factories.push_back(f.get_factory());
+			totallevels += economy::get_factory_level(state, f.get_factory());
 		}
-		std::sort(factories.begin(), factories.end(), [&](auto a, auto b) {return a.get_level() > b.get_level(); });
+		std::sort(factories.begin(), factories.end(), [&](auto a, auto b) {return economy::get_factory_level(state, a) > economy::get_factory_level(state, b); });
 
 		text::add_to_layout_box(state, contents, box, text::prettify(int64_t(factories.size())), text::text_color::yellow);
 
 		text::add_line_break_to_layout_box(state, contents, box);
 
 		text::localised_format_box(state, contents, box, std::string_view("mapmode_tooltip_factory_size"));
-		text::add_to_layout_box(state, contents, box, totallevels, text::text_color::yellow);
+		text::add_to_layout_box(state, contents, box, text::format_float(totallevels, 2), text::text_color::yellow);
 
 		for(size_t i = 0; i < factories.size(); i++) {
 			text::add_line_break_to_layout_box(state, contents, box);
@@ -1081,7 +1120,7 @@ void factory_map_tt_box(sys::state& state, text::columnar_layout& contents, dcon
 			text::add_to_layout_box(state, contents, box, factories[i].get_building_type().get_name(), text::text_color::yellow);
 			text::add_space_to_layout_box(state, contents, box);
 			text::add_to_layout_box(state, contents, box, std::string_view("("), text::text_color::white);
-			text::add_to_layout_box(state, contents, box, factories[i].get_level(),text::text_color::white);
+			text::add_to_layout_box(state, contents, box, text::format_float(economy::get_factory_level(state, factories[i]), 2), text::text_color::white);
 			text::add_to_layout_box(state, contents, box, std::string_view(")"), text::text_color::white);
 		}
 

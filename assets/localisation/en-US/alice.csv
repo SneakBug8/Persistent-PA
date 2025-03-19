@@ -221,6 +221,7 @@ month;month
 a_port;a port
 national_rank;national rank
 att_technology;technology
+alice_technology_leadership_points;Leadership points:
 strata;strata
 rich;rich
 poor;poor
@@ -272,6 +273,9 @@ a_cultural_union;a cultural union
 union_for_pop;the cultural union for the pop
 union_for_nation;the cultural union for the nation
 the_rebel_ind_nation;the rebel independence nation
+build_factory;Build factory
+upgrade_factory;Upgrade factory
+build_province_building;Build province building
 capitalists_can_build;capitalists are allowed to build factories
 capitalists_cannot_build;capitalists are not allowed to build factories
 at_war;at war
@@ -473,6 +477,7 @@ available_for;available for:
 support;support
 percentage;percentage
 stockpile;stockpile
+potentials;Potentials
 this_nat_religion;the national religion of this country
 from_nat_religion;the national religion of the from country
 event_show_requirements;Requirements for the event
@@ -484,10 +489,22 @@ value_mod_sum_factor;Value $val$ is $x$ times the sum of:
 admin_explain_1;Administrative efficiency modifier of $val$
 admin_explain_2;Applied to the ratio of non-colonial bureaucrats: $val$
 admin_explain_3;To the required percentage: $val$ (base $x$ + $y$ from reforms)
+admin_explain_4;Multiplier from issues: ?Y$val$?W
+admin_explain_5;Debuff from non-core provinces: ?R$val$?W
+admin_explain_6;Debuff from nationalism in provinces: ?R$val$?W
+admin_explain_7;?Y$x$?W out of ?Y$y$?W bureaucrats are members of rebels factions and refuse to collect taxes
+admin_integrating_explain_1;State has ?Y$val$?W of the required number of bureaucrats of accepted/primary culture to incorporate
+admin_explain_8;Local administration fulfilled: ?Y$val$?W
+admin_explain_9;Local tax collection capacity: ?Y$val$?W
+admin_explain_10;Spent on local bureaucrats: ?Y$val$?W
+admin_explain_11;Nation population per admin: ?Y$val$?W
+admin_explain_12;Local taxes collected: ?Y$x$ + $y$ + $m$?W = $total$
+admin_explain_12;Local taxes potential: ?Y$x$ + $y$ + $m$?W = $total$
 factory_condition_1;The nation is civilized
 factory_condition_2;This is not a colonial state
 factory_condition_3;The ruling party allows building factories
 factory_condition_4;There are fewer than $val$ factories in the state
+factory_condition_8;Factory type is allowed in colonial states
 cant_subsidize_explanation;The ruling party does not allow us to subsidize factories
 percent_of_pop_strata;$val$ of the population of their strata
 cant_prioritize_explanation;The ruling party does not allow us to change factory priority
@@ -501,8 +518,13 @@ factory_upgrade_condition_7;The investment target is not at war with you
 factory_upgrade_condition_8;The ruling party allows upgrading factories
 factory_upgrade_condition_9;The factory is not already being upgraded
 factory_upgrade_condition_10;The factory is not at max level
+factory_build_condition_11;State has available resource potentials
+factory_upgrade_condition_11;State has available resource potentials
+resource_potential;Resource potential
+available_potential;Local resources allow ?Y$val$?W levels of buildings producing $what$
 factory_delete_header;Delete factory
 factory_delete_not_allowed;The ruling party does not allow us to delete factories
+factory_level;Factory level ?Y$val$
 factory_stats_1;This factory is currently operating at $val$ capacity
 factory_stats_2;This factory is targeting $val$ capacity
 factory_stats_3;It produced $val$ units of $x$ in the previous day
@@ -1072,8 +1094,18 @@ alice_ca_cant_influence;We currently are unable to increase or decrease the opin
 alice_gp_status_regain_expiration;If we don't become rank ?Y$x$?W or higher, we will lose ?Ygreat power?W status by ?Y$date$?W!
 alice_mil_decay_description;Natural decay ?G-$x$
 alice_con_decay_description;Natural decay ?R-$x$
-x_from_y;$culture$ $x$ from $y$
+x_from_y;?Y$culture$?W $x$ from ?Y$y$?W
 x_in_y;$x$ at $y$
+alice_reserve_reg_count;$x$ currently have ?Y$y$?W reserve brigades in the battle.
+alice_reinforce_battle_mod_top;?Y$x$?W reserve brigades affected by the following reinforcement modifiers:
+alice_reinforce_battle_only_reserve;Only ?Yreserves?W in a battle can be reinforced.
+alice_reinforce_battle_spending_modifier;Average army supply fufillment: ?Yx$x$.?W
+alice_reinforce_battle_location_modifier;Average location modifier: ?Yx$x$.?W
+alice_reinforce_battle_national_modifier;Average national modifiers&techs: ?Yx$x$.?W
+alice_reinforce_rate_battle_attacker;The attackers can reinforce up to $x$ soldiers per month.
+alice_reinforce_rate_battle_attacker_none;The attackers are currently getting no reinforcements.
+alice_reinforce_rate_battle_defender;The defenders can reinforce up to $x$ soldiers per month.
+alice_reinforce_rate_battle_defender_none;The defenders are currently getting no reinforcements.
 reinforce_rate;This regiment can reinforce up to $x$ soldiers per month.
 reinforce_rate_none;This regiment can't currently be reinforced.
 alice_domestic_investment_button;Investing in individual projects is ?Rdeprecated?W, use the ?Ydomestic investment?W slider on the budget screen instead
@@ -1105,8 +1137,8 @@ CANCEL_WARSUBSIDIES_DESC;Cancel monetary help to this country;
 CANCEL_WARSUBSIDIES_BUTTON;Cancel Subsidies;
 production_refit_factory_tooltip_1;Refit ?Y$what$?! to a different production line
 production_refit_factory_tooltip_2;Refit ?Y$what$?! into ?Y$name$?!
-production_refit_factory_tooltip_3;Either can build factories
-production_refit_factory_tooltip_4;Or old and new types match in inputs or outputs
+production_refit_factory_tooltip_3;Ruling party allows building factories
+production_refit_factory_tooltip_4;Old and new types match in inputs or outputs
 factory_refit_cost;$what$: ?Y$val$?! (?Y$value$?!)
 factory_refit_cost_total;Total: ?Y$value$?!
 alice_budget_scaled_16;Diplomatic interest: ?G$value$
@@ -1173,7 +1205,7 @@ alice_mw_create_lpb;?YLeadership points?W will automatically be used to create g
 alice_mw_create_lp;We need ?R$x$?W ?Yleadership points?W to add
 alice_mw_controls_1;?YRight-click?W create ?Gall?W possible as generals
 alice_mw_controls_2;?YRight-click?W create ?Gall?W possible as admirals
-alice_daily_leadership_tt;$poptype$ provides ?G$value$?W leadership points (?Y$fraction$?W of the population, ?Y$optimal$?W is optimal). Extra leadership points will automatically be spent on creating new generals.
+alice_daily_leadership_tt;$poptype$ provide ?G$value$?W leadership points (?Y$fraction$?W of the population, ?Y$optimal$?W is optimal). Extra leadership points will automatically be spent on creating new generals.
 unit_current_supply;This unit received ?Y$val$%?W of the supplies needed in the last day.\nThe amount we could get of our current supply consumption was:
 unit_current_supply_high;$what$: ?Y$val$?W/?Y$value$?! ?l(?W?G$total$%?W?l demand satisfaction)
 unit_current_supply_mid;$what$: ?Y$val$?!/?Y$value$?! ?l(?O$total$%?W?l demand satisfaction)
@@ -1207,8 +1239,15 @@ alice_wg_condition_6;Enough jingoism (needs $need$, has $value$)
 alice_wg_condition_7;Is constructable wargoal
 alice_tt_wg_infamy_limit;?RThis wargoal will exceed the infamy limit?W
 alice_wg_usage_trigger;Can only use if the following trigger is satisfied:
-province_id;Province Id
+province_id;Alice Province ID
+provid;Content Province ID
+state;State Instance
+state_id;State Instance ID
+state_definition;State Definition
+state_definition_id;State Definition ID
 nation_tag;Nation tag
+nation_id;Alice Nation ID
+province_colonisation_temperature;State colonization temperature: ?R$val$?W
 alice_rgo_trade_prod_1;RGO Farming Production: $x$ ($y$)
 alice_rgo_trade_prod_2;RGO Mining Production: $x$ ($y$)
 alice_rgo_trade_prod_3;RGO Minting Production: $x$ ($y$)
@@ -1276,7 +1315,7 @@ supply;Supply
 demand;Demand
 balance;Balance
 market_stockpiles;In stock
-national_stockpile;Stockpile
+national_stockpile;Government Stockpile
 government_need;Government procurement
 factory_need;Factory inputs
 pop_need;Population needs
@@ -1299,11 +1338,16 @@ change_pname_to;Change $x$ party name to $text$
 change_rpname_to;Change ruling party name to $text$
 change_pposition_to;Change $x$ party position to $text$
 change_rpposition_to;Change ruling party position to $text$
+change_factory_limit_by;Change $good$ factory potential by $value$
 pname_is;$x$ party name
 rpname_is;ruling party name
 pposition_is;$x$ party position
 rpposition_is;ruling party position
 topbar_budget_warning;You were unable to fully afford yesterday's target budget spending
+provinceview_goodsprofit;With Profit of: ?Y$value$
+provinceview_max_employment;Potential max employment: ?Y$value$
+province_rgo_efficiency_inputs;Efficiency inputs:
+province_rgo_efficiency_input;?Y$good$?W : ?Y$value$
 rgo_output;Output
 rgo_profit;Total
 rgo_expected_profit;Actual
@@ -1320,12 +1364,25 @@ price_origin;Origin price
 price_target;Target price
 trade_distance;Distance
 volume;Volume
-desired_volume; Desired Volume
+actual_volume;Actual Volume
 max_throughput;Max volume
 trade_margin;Profit%
+used_throughput_tooltip;Volume used by all routes in the province: ?Y$val$W
+max_throughput_tooltip;Max volume for routes in the province: ?Y$val$W
+tariff_rate_origin;Seller effective tariff rate: ?Y$val$
+tariff_rate_target;Buyer effective tariff rate: ?Y$val$
+tariff_paid_origin;Tariffs paid at Seller: ?Y$val$
+tariff_paid_target;Tariffs paid at Buyer: ?Y$val$
+transport_cost_total;Total transportation costs: ?Y$val$
+transport_cost_per_unit;Transportation costs per unit: ?Y$val$
+transportaion_loss;Goods lost in transportation: ?Y$val$
+payment_per_unit;Buyer paid per unit: ?Y$val$
+payment_received_per_unit;Seller got per unit: ?Y$val$
+merchants_received_per_unit;Seller merchants profit per unit: ?Y$val$
 investment_pool;Investment pool: ?Y$x$?W
-investment_pool_income_1;Reinvestment: ?G$x$?W
+investment_pool_income_1;Population reinvestment: ?G$x$?W
 investment_pool_income_2;Transfer from subject $country$: ?G$x$W
+investment_pool_income_3;Government domestic investment: ?G$x$W
 investment_pool_spending_1;"Incentives" spending: ?R$x$?W
 investment_pool_spending_2;Construction spending: ?R$x$?W
 investment_pool_spending_3;Transfer to subjects: ?R$x$?W
@@ -1393,6 +1450,8 @@ aristocrat_savings;Aristocrats saving rate
 capitalist_savings;Capitalists saving rate
 middle_class_savings;Middle class saving rate
 farmers_savings;Farmers saving rate
+disallow_naval_trade;Ban naval trade
+disallow_land_trade;Ban land trade
 alice_filter_all;All
 alice_filter_none;None
 alice_filter_noncolonial;Non Colonial
@@ -1406,3 +1465,46 @@ alice_religion_filter_header;Religion
 alice_location_filter_header;Location
 alice_pop_show_details;Individual Details
 alice_demographics_window_header;Demographics
+alice_demographics_size_header;Size
+alice_demographics_job_header;Type
+alice_demographics_religion_header;Religion
+alice_demographics_location_header;Location
+alice_demographics_employment_header;Employment
+alice_demographics_needs_header;Needs
+alice_demographics_rebel_header;Rebel allegiance
+alice_pop_details_title;Pop Details
+alice_pop_details_location;Location
+alice_pop_details_job;Type:
+alice_pop_details_mil;Militancy:
+alice_pop_details_con;Consciousness:
+alice_pop_details_lit;Literacy:
+alice_pop_details_religion;Religion:
+alice_pop_details_culture;Culture:
+alice_pop_details_employment;Employment:
+alice_pop_details_income;Net Income:
+alice_pop_details_growth;Growth:
+alice_pop_details_assim;Assimilation:
+alice_pop_details_ln;Life Needs
+alice_pop_details_en;Everyday Needs
+alice_pop_details_lx;Luxury Needs
+alice_pop_details_need_name_h;Name
+alice_pop_details_need_amount_h;Qty
+alice_pop_details_need_cost_h;Price
+alice_pop_details_dest_h;Destination
+alice_pop_details_table_weight_h;Weight
+alice_pop_details_table_item_h;Item
+alice_pop_details_prom;Promotion
+alice_pop_details_dem;Demotion
+alice_pop_details_amount;Amount:
+alice_pop_details_ideo;Ideologies
+alice_pop_details_iss;Issues
+alice_pop_details_emm;Emigration
+alice_pop_details_mig;Migration
+alice_pop_details_i_amount;Internal amount:
+alice_pop_details_c_amount;Colonial amount:
+pop_emigration_attraction_1;Emigration attraction is the product of:
+pop_emigration_attraction_2;The national modifier to immigrant attraction: $x$
+pop_emigration_attraction_3;And the migration target factor: $x$
+pop_migration_attraction_1;Migration attraction is the product of:
+pop_migration_attraction_2;The provincial modifier to immigrant attraction: $x$
+pop_migration_attraction_3;And the migration target factor: $x$

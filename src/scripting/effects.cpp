@@ -3416,7 +3416,7 @@ uint32_t ef_militancy_state(EFFECT_PARAMTERS) {
 	return 0;
 }
 uint32_t ef_rgo_size(EFFECT_PARAMTERS) {
-	auto& s = ws.world.province_get_rgo_size(trigger::to_prov(primary_slot));
+	auto& s = ws.world.province_get_rgo_base_size(trigger::to_prov(primary_slot));
 	s = std::max(s + float(trigger::payload(tval[1]).signed_value), 0.0f);
 	return 0;
 }
@@ -5330,6 +5330,19 @@ uint32_t ef_change_party_position(EFFECT_PARAMTERS) {
 	}
 	return 0;
 }
+
+uint32_t ef_change_factory_limit(EFFECT_PARAMTERS) {
+	auto com = trigger::payload(tval[1]).com_id;
+	auto change = trigger::payload(tval[2]).value;
+
+	if(com) {
+		auto p = trigger::to_prov(primary_slot);
+		ws.world.province_get_factory_max_size(p, com) += (int) change;
+		return 0;
+	}
+	return 0;
+}
+
 
 inline constexpr uint32_t(*effect_functions[])(EFFECT_PARAMTERS) = {
 		ef_none,

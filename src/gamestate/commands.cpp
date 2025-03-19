@@ -1,6 +1,7 @@
 #include "commands.hpp"
 #include "demographics.hpp"
 #include "economy_templates.hpp"
+#include "economy_stats.hpp"
 #include "effects.hpp"
 #include "gui_event.hpp"
 #include "serialization.hpp"
@@ -461,7 +462,7 @@ void execute_begin_province_building_construction(sys::state& state, dcon::natio
 }
 
 
-void cancel_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::state_instance_id location, dcon::factory_type_id type) {
+void cancel_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::factory_type_id type) {
 	payload p;
 	memset(&p, 0, sizeof(payload));
 	p.type = command_type::cancel_factory_building_construction;
@@ -470,9 +471,9 @@ void cancel_factory_building_construction(sys::state& state, dcon::nation_id sou
 	p.data.start_factory_building.type = type;
 	add_to_command_queue(state, p);
 }
-bool can_cancel_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::state_instance_id location, dcon::factory_type_id type) {
-	auto owner = state.world.state_instance_get_nation_from_state_ownership(location);
-	for(auto c : state.world.state_instance_get_state_building_construction(location)) {
+bool can_cancel_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::factory_type_id type) {
+	auto owner = state.world.province_get_nation_from_province_ownership(location);
+	for(auto c : state.world.province_get_factory_construction(location)) {
 		if(c.get_type() == type) {
 			if(c.get_is_pop_project())
 				return false;
@@ -483,21 +484,21 @@ bool can_cancel_factory_building_construction(sys::state& state, dcon::nation_id
 	}
 	return false;
 }
-void execute_cancel_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::state_instance_id location, dcon::factory_type_id type) {
-	auto owner = state.world.state_instance_get_nation_from_state_ownership(location);
-	for(auto c : state.world.state_instance_get_state_building_construction(location)) {
+void execute_cancel_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::factory_type_id type) {
+	auto owner = state.world.province_get_nation_from_province_ownership(location);
+	for(auto c : state.world.province_get_factory_construction(location)) {
 		if(c.get_type() == type) {
 			if(c.get_is_pop_project())
 				return;
 			if(c.get_nation() != source)
 				return;
 
-			state.world.delete_state_building_construction(c);
+			state.world.delete_factory_construction(c);
 			return;
 		}
 	}
 }
-void begin_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::state_instance_id location, dcon::factory_type_id type, bool is_upgrade, dcon::factory_type_id refit_target) {
+void begin_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::factory_type_id type, bool is_upgrade, dcon::factory_type_id refit_target) {
 	payload p;
 	memset(&p, 0, sizeof(payload));
 	p.type = command_type::begin_factory_building_construction;
@@ -509,21 +510,31 @@ void begin_factory_building_construction(sys::state& state, dcon::nation_id sour
 	add_to_command_queue(state, p);
 }
 
-bool can_begin_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::state_instance_id location, dcon::factory_type_id type, bool is_upgrade, dcon::factory_type_id refit_target) {
+bool can_begin_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::factory_type_id type, bool is_upgrade, dcon::factory_type_id refit_target) {
 
-	auto owner = state.world.state_instance_get_nation_from_state_ownership(location);
+	auto owner = state.world.province_get_nation_from_province_ownership(location);
+	auto sid = state.world.province_get_state_membership(location);
 
 	/*
 	The factory building must be unlocked by the nation.
-	Factories cannot be built in a colonial state.
 	*/
-
 	if(state.world.nation_get_active_building(source, type) == false && !state.world.factory_type_get_is_available_from_start(type))
 		return false;
-	if(state.world.province_get_is_colonial(state.world.state_instance_get_capital(location)))
-		return false;
 
-	/* There can't be duplicate factories... */
+	// Disallow building in colonies unless define flag is set
+	if(state.world.province_get_is_colonial(state.world.state_instance_get_capital(sid)) && state.defines.alice_disallow_factories_in_colonies != 0.f)
+		return false;
+	else if(state.world.province_get_is_colonial(state.world.state_instance_get_capital(sid)) and state.defines.alice_disallow_factories_in_colonies == 0.f) {
+		// If building in colonies is allowed, factory type should have a flag allowing it to be built in colonies too
+		if(refit_target && !state.world.factory_type_get_can_be_built_in_colonies(refit_target)) {
+			return false;
+		}
+		else if(!state.world.factory_type_get_can_be_built_in_colonies(type)) {
+			return false;
+		}
+	}
+
+	/* There can't be duplicate factories */
 	if(!is_upgrade && !refit_target) {
 		// Check factories being built
 		bool has_dup = false;
@@ -532,12 +543,9 @@ bool can_begin_factory_building_construction(sys::state& state, dcon::nation_id 
 			return false;
 
 		// Check actual factories
-		auto d = state.world.state_instance_get_definition(location);
-		for(auto p : state.world.state_definition_get_abstract_state_membership(d))
-			if(p.get_province().get_nation_from_province_ownership() == owner)
-				for(auto f : p.get_province().get_factory_location())
-					if(f.get_factory().get_building_type() == type)
-						return false;
+		for(auto f : state.world.province_get_factory_location(location))
+			if(f.get_factory().get_building_type() == type)
+				return false;
 	}
 
 	if(refit_target) {
@@ -627,46 +635,54 @@ bool can_begin_factory_building_construction(sys::state& state, dcon::nation_id 
 		}
 	}
 
+	/* If mod uses Factory Province limits */
+	if(is_upgrade) {
+		if(!economy::do_resource_potentials_allow_upgrade(state, source, location, type)) {
+			return false;
+		}
+	} else if(refit_target) {
+		if(!economy::do_resource_potentials_allow_refit(state, source, location, type, refit_target)) {
+			return false;
+		}
+	} else {
+		if(!economy::do_resource_potentials_allow_construction(state, source, location, type)) {
+			return false;
+		}
+	}
+
 	if(is_upgrade) {
 		// no double upgrade
-		for(auto p : state.world.state_instance_get_state_building_construction(location)) {
+		for(auto p : state.world.province_get_factory_construction(location)) {
 			if(p.get_type() == type)
 				return false;
 		}
 
 		// must already exist as a factory
 		// For upgrades: no upgrading past max level.
-		auto d = state.world.state_instance_get_definition(location);
-		for(auto p : state.world.state_definition_get_abstract_state_membership(d)) {
-			if(p.get_province().get_nation_from_province_ownership() == owner) {
-				for(auto f : p.get_province().get_factory_location()) {
-					if(f.get_factory().get_building_type() == type && f.get_factory().get_level() < uint8_t(255)) {
-						return true;
-					}
-				}
-			}
-		}
+		for(auto f : state.world.province_get_factory_location(location))
+			if(f.get_factory().get_building_type() == type)
+				return true;
 		return false;
 	} else {
 		// coastal factories must be built on coast
 		if(state.world.factory_type_get_is_coastal(type)) {
-			if(!province::state_is_coastal(state, location))
+			if(!state.world.province_get_port_to(location))
 				return false;
 		}
 
-		int32_t num_factories = economy::state_factory_count(state, location, owner);
+		int32_t num_factories = economy::province_factory_count(state, location);
 		return num_factories < int32_t(state.defines.factories_per_state);
 	}
 }
 
-void execute_begin_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::state_instance_id location, dcon::factory_type_id type, bool is_upgrade, dcon::factory_type_id refit_target) {
-	auto new_up = fatten(state.world, state.world.force_create_state_building_construction(location, source));
+void execute_begin_factory_building_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::factory_type_id type, bool is_upgrade, dcon::factory_type_id refit_target) {
+	auto new_up = fatten(state.world, state.world.force_create_factory_construction(location, source));
 	new_up.set_is_pop_project(false);
 	new_up.set_is_upgrade(is_upgrade);
 	new_up.set_type(type);
 	new_up.set_refit_target(refit_target);
 
-	if(source != state.world.state_instance_get_nation_from_state_ownership(location)) {
+	if(source != state.world.province_get_nation_from_province_ownership(location)) {
 		float amount = 0.0f;
 		auto& base_cost = state.world.factory_type_get_construction_costs(type);
 		for(uint32_t j = 0; j < economy::commodity_set::set_size; ++j) {
@@ -676,7 +692,7 @@ void execute_begin_factory_building_construction(sys::state& state, dcon::nation
 				break;
 			}
 		}
-		nations::adjust_foreign_investment(state, source, state.world.state_instance_get_nation_from_state_ownership(location), amount);
+		nations::adjust_foreign_investment(state, source, state.world.province_get_nation_from_province_ownership(location), amount);
 	}
 }
 
@@ -864,9 +880,9 @@ void execute_delete_factory(sys::state& state, dcon::nation_id source, dcon::pro
 	if((rules & issue_rule::destroy_factory) == 0)
 		return;
 
-	for(auto sc : state.world.state_instance_get_state_building_construction(state.world.province_get_state_membership(location))) {
+	for(auto sc : state.world.province_get_factory_construction(location)) {
 		if(sc.get_type() == type) {
-			state.world.delete_state_building_construction(sc);
+			state.world.delete_factory_construction(sc);
 			break;
 		}
 	}
@@ -2756,7 +2772,7 @@ bool can_state_transfer(sys::state& state, dcon::nation_id asker, dcon::nation_i
 	//	return false;
 
 	// Asker and target must be in a subject relation
-	if(state.defines.alice_state_transfer_limits) {
+	if(state.defines.alice_state_transfer_limits > 0.0f) {
 		auto ol2 = state.world.nation_get_overlord_as_subject(target);
 		if(state.world.overlord_get_ruler(ol) != target && state.world.overlord_get_ruler(ol2) != asker)
 			return false;
@@ -3479,13 +3495,19 @@ void execute_send_peace_offer(sys::state& state, dcon::nation_id source) {
 
 		if(containseverywargoal) {
 			military::implement_peace_offer(state, pending_offer);
+
+			if(target == state.local_player_nation) {
+				sound::play_interface_sound(state, sound::get_enemycapitulated_sound(state), state.user_settings.interface_volume * state.user_settings.master_volume);
+			}
 		}
 	}
-
 	// A peace offer must be accepted when war score reaches 100.
-	if(military::directed_warscore(state, in_war, source, target) >= 100.0f && (!target.get_is_player_controlled() || !state.world.peace_offer_get_is_concession(pending_offer)) && military::cost_of_peace_offer(state, pending_offer) <= 100) {
-
+	else if(military::directed_warscore(state, in_war, source, target) >= 100.0f && (!target.get_is_player_controlled() || !state.world.peace_offer_get_is_concession(pending_offer)) && military::cost_of_peace_offer(state, pending_offer) <= 100) {
 		military::implement_peace_offer(state, pending_offer);
+
+		if(target == state.local_player_nation) {
+			sound::play_interface_sound(state, sound::get_wecapitulated_sound(state), state.user_settings.interface_volume * state.user_settings.master_volume);
+		}
 	}
 	else {
 		diplomatic_message::message m;
@@ -5984,6 +6006,8 @@ bool can_perform_command(sys::state& state, payload& c) {
 		return true;
 	case command_type::grant_province:
 		return false;
+	case command_type::network_populate:
+		return false;
 	}
 	return false;
 }
@@ -6376,6 +6400,8 @@ void execute_command(sys::state& state, payload& c) {
 		execute_console_command(state);
 		break;
 	case command_type::grant_province:
+		break;
+	case command_type::network_populate:
 		break;
 	}
 }

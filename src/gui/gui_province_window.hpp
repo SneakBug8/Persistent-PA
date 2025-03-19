@@ -14,6 +14,7 @@
 #include "gui_build_unit_large_window.hpp"
 #include "province_templates.hpp"
 #include "nations_templates.hpp"
+#include "gui_province_tiles_window.hpp"
 
 namespace ui {
 
@@ -1176,7 +1177,7 @@ public:
 	void button_action(sys::state& state) noexcept override {
 		auto content = retrieve<dcon::province_id>(state, parent);
 		if(content) {
-			open_build_foreign_factory(state, state.world.province_get_state_membership(content));
+			open_build_foreign_factory(state, content);
 		}
 
 	}
@@ -1190,7 +1191,7 @@ public:
 
 		for(auto ft : state.world.in_factory_type) {
 			if(command::can_begin_factory_building_construction(state, state.local_player_nation,
-				state.world.province_get_state_membership(content), ft, false)) {
+				content, ft, false)) {
 
 				disabled = false;
 				return;
@@ -1401,8 +1402,8 @@ class province_rgo_employment_progress_icon : public opaque_element_base {
 public:
 	void on_update(sys::state& state) noexcept override {
 		auto province = retrieve<dcon::province_id>(state, parent);
-		auto max_emp = province::land_maximum_employment(state, province);
-		auto employment_ratio = province::land_employment(state, province) / (max_emp + 1.f);
+		auto max_emp = economy::rgo_max_employment(state, province);
+		auto employment_ratio = economy::rgo_employment(state, province) / (max_emp + 1.f);
 		frame = int32_t(10.f * employment_ratio);
 	}
 	tooltip_behavior has_tooltip(sys::state& state) noexcept override {
@@ -1411,8 +1412,8 @@ public:
 	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override {
 		auto prov_id = retrieve<dcon::province_id>(state, parent);
 		auto owner = state.world.province_get_nation_from_province_ownership(prov_id);
-		auto max_emp = province::land_maximum_employment(state, prov_id);
-		auto employment_ratio = province::land_employment(state, prov_id) / (max_emp + 1.f);
+		auto max_emp = economy::rgo_max_employment(state, prov_id);
+		auto employment_ratio = economy::rgo_employment(state, prov_id) / (max_emp + 1.f);
 
 		auto box = text::open_layout_box(contents);
 		text::add_to_layout_box(state, contents, box, int64_t(std::ceil(employment_ratio * max_emp)));
@@ -1519,7 +1520,13 @@ class province_rgo_employment_percent_text : public simple_text_element_base {
 public:
 	void on_update(sys::state& state) noexcept override {
 		auto province_id = retrieve<dcon::province_id>(state, parent);
-		set_text(state, text::format_percentage(state.world.province_get_rgo_employment(province_id), 1));
+		auto max_emp = economy::rgo_max_employment(state, province_id);
+		auto emp = economy::rgo_employment(state, province_id);
+		auto ratio = 0.f;
+		if(max_emp > 0) {
+			ratio = emp / max_emp;
+		}
+		set_text(state, text::format_percentage(ratio, 1));
 	}
 	tooltip_behavior has_tooltip(sys::state& state) noexcept override {
 		return tooltip_behavior::variable_tooltip;
@@ -2231,8 +2238,22 @@ public:
 class province_colonisation_temperature : public progress_bar {
 public:
 	void on_update(sys::state& state) noexcept override {
-		auto content = retrieve<dcon::state_instance_id>(state, parent);
-		progress = dcon::fatten(state.world, content).get_definition().get_colonization_temperature();
+		// auto content = retrieve<dcon::state_instance_id>(state, parent);
+		// Uncolonized state doesn't have state instance assigned
+		auto prov_id = retrieve<dcon::province_id>(state, parent);
+		// Colonization temperature has [0;100] range and progress [0;1].
+		progress = dcon::fatten(state.world, prov_id).get_state_from_abstract_state_membership().get_colonization_temperature() / 100.f;
+	}
+
+	tooltip_behavior has_tooltip(sys::state& state) noexcept override {
+		return tooltip_behavior::tooltip;
+	}
+
+	void update_tooltip(sys::state& state, int32_t x, int32_t y, text::columnar_layout& contents) noexcept override {
+		// auto content = retrieve<dcon::state_instance_id>(state, parent);
+		auto prov_id = retrieve<dcon::province_id>(state, parent);
+		auto temp = dcon::fatten(state.world, prov_id).get_state_from_abstract_state_membership().get_colonization_temperature();
+		text::add_line(state, contents, "province_colonisation_temperature", text::variable_type::val, text::fp_percentage_one_place{ temp / 100.f });
 	}
 };
 
@@ -2428,12 +2449,39 @@ inline table::column<dcon::trade_route_id> trade_route_4 = {
 	},
 	.view = [](sys::state& state, element_base* container, dcon::trade_route_id item) {
 		return text::format_float(dcon::fatten(state.world, item).get_distance());
-	}
+	},
+	.update_tooltip = [](
+		sys::state& state,
+		element_base* container,
+		text::columnar_layout& contents,
+		const dcon::trade_route_id& a,
+		std::string fallback
+	) {
+		auto c = retrieve<dcon::commodity_id>(state, container);
+		auto local_market = retrieve<dcon::market_id>(state, container);
+		auto trade_and_tariff = economy::explain_trade_route_commodity(state, a, c);
+
+		auto volume = std::abs(state.world.trade_route_get_volume(a, c));
+
+		text::add_line(state, contents, "tariff_rate_origin", text::variable_type::val, text::fp_percentage_one_place{ trade_and_tariff.tariff_rate_origin });
+		text::add_line(state, contents, "tariff_rate_target", text::variable_type::val, text::fp_percentage_one_place{ trade_and_tariff.tariff_rate_target });
+		text::add_line(state, contents, "tariff_paid_origin", text::variable_type::val, text::fp_currency{ trade_and_tariff.tariff_origin });
+		text::add_line(state, contents, "tariff_paid_target", text::variable_type::val, text::fp_currency{ trade_and_tariff.tariff_target });
+		text::add_line_break_to_layout(state, contents);
+		text::add_line(state, contents, "transport_cost_per_unit", text::variable_type::val, text::fp_currency{ trade_and_tariff.transport_cost });
+		text::add_line(state, contents, "transport_cost_total", text::variable_type::val, text::fp_currency{ trade_and_tariff.transport_cost * volume });
+		text::add_line(state, contents, "transportaion_loss", text::variable_type::val, text::fp_percentage_one_place{ 1.f - trade_and_tariff.transportaion_loss });
+		text::add_line_break_to_layout(state, contents);
+		text::add_line(state, contents, "payment_per_unit", text::variable_type::val, text::fp_currency{ trade_and_tariff.payment_per_unit });
+		text::add_line(state, contents, "payment_received_per_unit", text::variable_type::val, text::fp_currency{ trade_and_tariff.price_origin });
+		text::add_line(state, contents, "merchants_received_per_unit", text::variable_type::val, text::fp_currency{ trade_and_tariff.payment_received_per_unit });
+	},
+	.has_tooltip = true,
 };
 
 inline table::column<dcon::trade_route_id> trade_route_5 = {
 	.sortable = true,
-	.header = "desired_volume",
+	.header = "actual_volume",
 	.compare = [](sys::state& state, element_base* container, dcon::trade_route_id a, dcon::trade_route_id b) {
 		auto local_market = retrieve<dcon::market_id>(state, container);
 		int32_t index_a = 0;
@@ -2505,11 +2553,8 @@ inline table::column<dcon::trade_route_id> trade_route_6 = {
 		});
 		float max = state.world.market_get_max_throughput(local_market);
 
-		auto box = text::open_layout_box(contents, 0);
-		text::add_to_layout_box(state, contents, box, text::fp_two_places{ total });
-		text::add_to_layout_box(state, contents, box, std::string("/"));
-		text::add_to_layout_box(state, contents, box, text::fp_two_places{ max });
-		text::close_layout_box(contents, box);
+		text::add_line(state, contents, "used_throughput_tooltip", text::variable_type::val, text::fp_two_places{ total });
+		text::add_line(state, contents, "max_throughput_tooltip", text::variable_type::val, text::fp_two_places{ max });
 	},
 	.has_tooltip = true,
 };
@@ -2598,8 +2643,8 @@ inline table::column<dcon::commodity_id> rgo_amount = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto av = state.world.province_get_rgo_actual_production_per_good(p, a);
-		auto bv = state.world.province_get_rgo_actual_production_per_good(p, b);
+		auto av = economy::rgo_output(state, a, p);
+		auto bv = economy::rgo_output(state, b, p);
 		if(av != bv)
 			return av > bv;
 		else
@@ -2610,7 +2655,7 @@ inline table::column<dcon::commodity_id> rgo_amount = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto value = state.world.province_get_rgo_actual_production_per_good(p, id);
+		auto value = economy::rgo_output(state, id, p);
 		return text::format_float(value);
 	}
 };
@@ -2623,8 +2668,8 @@ inline table::column<dcon::commodity_id> rgo_profit = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto av = state.world.province_get_rgo_profit_per_good(p, a);
-		auto bv = state.world.province_get_rgo_profit_per_good(p, b);
+		auto av = economy::rgo_income(state, a, p);
+		auto bv = economy::rgo_income(state, b, p);
 		if(av != bv)
 			return av > bv;
 		else
@@ -2635,7 +2680,7 @@ inline table::column<dcon::commodity_id> rgo_profit = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto value = state.world.province_get_rgo_profit_per_good(p, id);
+		auto value = economy::rgo_income(state, id, p);
 		return text::format_money(value);
 	}
 };
@@ -2681,13 +2726,8 @@ inline table::column<dcon::commodity_id> rgo_desired_profit = {
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 		auto pops = economy::rgo_relevant_population(state, p, n);
 		auto min_wage_factor = economy::pop_min_wage_factor(state, n);
-		auto pop_farmer_min_wage = economy::farmer_min_wage(state, m, min_wage_factor);
-		auto pop_laborer_min_wage = economy::laborer_min_wage(state, m, min_wage_factor);
 		bool is_mine = state.world.commodity_get_is_mine(state.world.province_get_rgo(p));
-		auto v = economy::rgo_desired_worker_norm_profit(
-			state, p, m, n,
-			is_mine ? pop_laborer_min_wage : pop_farmer_min_wage,
-			pops.total);
+		auto v = state.world.province_get_labor_price(p, economy::labor::no_education) * (1.f + economy::aristocrats_greed);
 
 		auto value = v * state.defines.alice_rgo_per_size_employment;
 		return text::format_money(value);
@@ -2703,8 +2743,8 @@ inline table::column<dcon::commodity_id> rgo_employment = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto av = state.world.province_get_rgo_target_employment_per_good(p, a);
-		auto bv = state.world.province_get_rgo_target_employment_per_good(p, b);
+		auto av = economy::rgo_employment(state, a, p);
+		auto bv = economy::rgo_employment(state, b, p);
 		if(av != bv)
 			return av > bv;
 		else
@@ -2716,7 +2756,7 @@ inline table::column<dcon::commodity_id> rgo_employment = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto value = state.world.province_get_rgo_target_employment_per_good(p, id) * state.world.market_get_labor_demand_satisfaction(m, economy::labor::no_education);
+		auto value = economy::rgo_employment(state, id, p);
 		return text::format_wholenum(int32_t(value));
 	}
 };
@@ -2730,8 +2770,8 @@ inline table::column<dcon::commodity_id> rgo_max_employment = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto av = economy::rgo_max_employment(state, n, p, a);
-		auto bv = economy::rgo_max_employment(state, n, p, b);
+		auto av = economy::rgo_max_employment(state, a, p);
+		auto bv = economy::rgo_max_employment(state, b, p);
 		if(av != bv)
 			return av > bv;
 		else
@@ -2743,7 +2783,7 @@ inline table::column<dcon::commodity_id> rgo_max_employment = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto value = economy::rgo_max_employment(state, n, p, id);
+		auto value = economy::rgo_max_employment(state, id, p);
 		return text::format_wholenum(int32_t(value));
 	}
 };
@@ -2757,11 +2797,11 @@ inline table::column<dcon::commodity_id> rgo_saturation = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto ae = economy::rgo_max_employment(state, n, p, a);
-		auto be = economy::rgo_max_employment(state, n, p, b);
+		auto ae = economy::rgo_max_employment(state, a, p);
+		auto be = economy::rgo_max_employment(state, b, p);
 
-		auto av = state.world.province_get_rgo_target_employment_per_good(p, a);
-		auto bv = state.world.province_get_rgo_target_employment_per_good(p, b);
+		auto av = economy::rgo_employment(state, a, p);
+		auto bv = economy::rgo_employment(state, b, p);
 
 		auto ar = ae > 0.f ? av / ae : 0.f;
 		auto br = be > 0.f ? bv / be : 0.f;
@@ -2777,20 +2817,31 @@ inline table::column<dcon::commodity_id> rgo_saturation = {
 		auto si = retrieve<dcon::state_instance_id>(state, container);
 		auto m = state.world.state_instance_get_market_from_local_market(si);
 
-		auto e = economy::rgo_max_employment(state, n, p, id);
-		auto v = state.world.province_get_rgo_target_employment_per_good(p, id);
+		auto e = economy::rgo_max_employment(state, id, p);
+		auto v = economy::rgo_employment(state, id, p);
 		auto r = e > 0.f ? v / e : 0.f;
 
 		return text::format_percentage(r);
 	}
 };
 
-struct province_economy_toggle_signal { };
+enum province_subtab_toggle_signal {
+	economy = 1,
+	tiles = 2
+};
+
 
 class economy_data_toggle : public button_element_base {
 public:
 	void button_action(sys::state& state) noexcept override {
-		send<province_economy_toggle_signal>(state, parent, { });
+		send<province_subtab_toggle_signal>(state, parent, province_subtab_toggle_signal::economy);
+	}
+};
+
+class province_tiles_toggle : public button_element_base {
+public:
+	void button_action(sys::state& state) noexcept override {
+		send<province_subtab_toggle_signal>(state, parent, province_subtab_toggle_signal::tiles);
 	}
 };
 
@@ -2806,7 +2857,7 @@ public:
 	std::unique_ptr<element_base> make_child(sys::state& state, std::string_view name, dcon::gui_def_id id) noexcept override {
 		if(name == "toggle-economy-province") {
 			return make_element_by_type<economy_data_toggle>(state, id);
-		}else if(name == "table_rgo_data") {
+		} else if(name == "table_rgo_data") {
 			std::vector<table::column<dcon::commodity_id>> columns = {
 				rgo_name, rgo_price, rgo_amount, rgo_profit, rgo_expected_profit,
 				rgo_desired_profit, rgo_employment, rgo_max_employment, rgo_saturation
@@ -2923,17 +2974,24 @@ public:
 	}
 
 	message_result get(sys::state& state, Cyto::Any& payload) noexcept override {
-		if(payload.holds_type<province_economy_toggle_signal>()) {
-			if(rgo_bg->is_visible()) {
-				trade_table->set_visible(state, false);
-				trade_routes_bg->set_visible(state, false);
-				rgo_table->set_visible(state, false);
-				rgo_bg->set_visible(state, false);
-				rgo_headers->set_visible(state, false);
-			} else {
-				rgo_table->set_visible(state, true);
-				rgo_bg->set_visible(state, true);
-				rgo_headers->set_visible(state, true);
+		if(payload.holds_type<province_subtab_toggle_signal>()) {
+			auto enum_val = any_cast<province_subtab_toggle_signal>(payload);
+
+			if(enum_val == province_subtab_toggle_signal::economy) {
+				if(rgo_bg->is_visible()) {
+					trade_table->set_visible(state, false);
+					trade_routes_bg->set_visible(state, false);
+					rgo_table->set_visible(state, false);
+					rgo_bg->set_visible(state, false);
+					rgo_headers->set_visible(state, false);
+				} else {
+					rgo_table->set_visible(state, true);
+					rgo_bg->set_visible(state, true);
+					rgo_headers->set_visible(state, true);
+				}
+			}
+			else if(enum_val == province_subtab_toggle_signal::tiles) {
+
 			}
 			return message_result::consumed;
 		}
@@ -2951,6 +3009,7 @@ private:
 	province_window_colony* colony_window = nullptr;
 	province_economy_window* economy_window = nullptr;
 	element_base* nf_win = nullptr;
+	element_base* tiles_window = nullptr;
 
 public:
 	void on_create(sys::state& state) noexcept override {
@@ -2961,6 +3020,11 @@ public:
 		auto ptr = make_element_by_type<build_unit_province_window>(state, "build_unit_view");
 		state.ui_state.build_province_unit_window = ptr.get();
 		add_child_to_front(std::move(ptr));
+
+		auto ptr2 = make_element_by_type<province_tiles_window>(state, "province_tiles_window");
+		tiles_window = ptr2.get();
+		tiles_window->set_visible(state, false);
+		add_child_to_front(std::move(ptr2));
 	}
 
 	std::unique_ptr<element_base> make_child(sys::state& state, std::string_view name, dcon::gui_def_id id) noexcept override {
@@ -3001,6 +3065,8 @@ public:
 			auto ptr = make_element_by_type<province_economy_window>(state, id);
 			economy_window = ptr.get();
 			return ptr;
+		} else if(name == "toggle-tiles-province") {
+			return make_element_by_type<province_tiles_toggle>(state, id);
 		} else {
 			return nullptr;
 		}
@@ -3025,10 +3091,17 @@ public:
 			dcon::market_id mid = dcon::fatten(state.world, active_province).get_state_membership().get_market_from_local_market();
 			payload.emplace<dcon::market_id>(mid);
 			return message_result::consumed;
+		} else if (payload.holds_type<province_subtab_toggle_signal>()) {
+			auto enum_val = any_cast<province_subtab_toggle_signal>(payload);
+
+			if(enum_val == province_subtab_toggle_signal::tiles) {
+				tiles_window->set_visible(state, !tiles_window->is_visible());
+			}
+			return message_result::consumed;
 		}
 		return message_result::unseen;
 	}
-
+	
 	void set_active_province(sys::state& state, dcon::province_id map_province) {
 		if(bool(map_province)) {
 			active_province = map_province;

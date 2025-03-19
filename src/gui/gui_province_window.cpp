@@ -1,14 +1,14 @@
 #include "gui_province_window.hpp"
+#include "gui_common_elements.hpp"
 
 namespace ui {
 
 void province_owner_rgo_draw_tooltip(sys::state& state, text::columnar_layout& contents, dcon::province_id prov_id) noexcept {
 	auto rgo_good = state.world.province_get_rgo(prov_id);
-	auto nat_id = state.world.province_get_nation_from_province_ownership(prov_id);
 
 	state.world.for_each_commodity([&](dcon::commodity_id c) {
-		auto production = province::rgo_production_quantity(state, prov_id, c);
-		auto profit = state.world.province_get_rgo_profit_per_good(prov_id, c);
+		auto production = economy::rgo_output(state, c, prov_id);
+		auto profit = state.world.province_get_rgo_profit(prov_id);
 
 		if(production < 0.0001f) {
 			return;
@@ -31,52 +31,7 @@ void province_owner_rgo_draw_tooltip(sys::state& state, text::columnar_layout& c
 	});
 
 	if(rgo_good) {
-
-		text::add_line(state, contents, "provinceview_goodsincome", text::variable_type::goods, rgo_good.get_name(), text::variable_type::value,
-					text::fp_three_places{ province::rgo_income(state, prov_id) });
-
-		{
-			auto box = text::open_layout_box(contents, 0);
-			text::substitution_map sub_map;
-			auto const production = province::rgo_production_quantity(state, prov_id, rgo_good);
-
-			text::add_to_substitution_map(sub_map, text::variable_type::curr, text::fp_two_places{ production });
-			text::localised_format_box(state, contents, box, std::string_view("production_output_goods_tooltip2"), sub_map);
-			text::localised_format_box(state, contents, box, std::string_view("production_output_explanation"));
-			text::close_layout_box(contents, box);
-		}
-
-		text::add_line_break_to_layout(state, contents);
-
-		{
-			auto const production = province::rgo_production_quantity(state, prov_id, rgo_good);
-			auto const base_size = economy::rgo_effective_size(state, nat_id, prov_id, rgo_good) * state.world.commodity_get_rgo_amount(rgo_good);
-			text::add_line(state, contents, std::string_view("production_base_output_goods_tooltip"), text::variable_type::base, text::fp_two_places{ base_size });
-		}
-
-		{
-			auto box = text::open_layout_box(contents, 0);
-			bool const is_mine = state.world.commodity_get_is_mine(rgo_good);
-			auto const efficiency = 1.0f +
-				state.world.province_get_modifier_values(prov_id,
-						is_mine ? sys::provincial_mod_offsets::mine_rgo_eff : sys::provincial_mod_offsets::farm_rgo_eff) +
-				state.world.nation_get_modifier_values(nat_id,
-						is_mine ? sys::national_mod_offsets::mine_rgo_eff : sys::national_mod_offsets::farm_rgo_eff);
-			text::localised_format_box(state, contents, box, std::string_view("production_output_efficiency_tooltip"));
-			text::add_to_layout_box(state, contents, box, text::fp_percentage{ efficiency }, efficiency >= 0.0f ? text::text_color::green : text::text_color::red);
-			text::close_layout_box(contents, box);
-		}
-
-		text::add_line_break_to_layout(state, contents);
-
-		{
-			auto box = text::open_layout_box(contents, 0);
-			auto const throughput = state.world.province_get_rgo_employment(prov_id);
-			text::localised_format_box(state, contents, box, std::string_view("production_throughput_efficiency_tooltip"));
-			text::add_to_layout_box(state, contents, box, text::fp_percentage{ throughput }, throughput >= 0.0f ? text::text_color::green : text::text_color::red);
-
-			text::close_layout_box(contents, box);
-		}
+		province_owner_rgo_commodity_tooltip(state, contents, prov_id, rgo_good);
 	}
 }
 
@@ -182,8 +137,8 @@ float trade_route_profit(sys::state& state, dcon::trade_route_id route, dcon::co
 
 	auto transport_cost = distance / economy::trade_distance_covered_by_pair_of_workers_per_unit_of_good
 	* (
-		state.world.market_get_labor_price(A, economy::labor::no_education)
-		+ state.world.market_get_labor_price(B, economy::labor::no_education)
+		state.world.province_get_labor_price(capital_A, economy::labor::no_education)
+		+ state.world.province_get_labor_price(capital_B, economy::labor::no_education)
 	);
 	// effect of scale
 	// volume reduces transport costs

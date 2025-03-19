@@ -6,6 +6,7 @@
 #include "demographics.hpp"
 #include "province_templates.hpp"
 #include "economy_stats.hpp"
+#include "economy_production.hpp"
 
 using json = nlohmann::json;
 
@@ -239,6 +240,7 @@ json format_province(sys::state& state, dcon::province_id prov) {
 
 	j["id"] = prov.index();
 	j["name"] = province_name;
+	j["provid"] = state.world.province_get_provid(prov);
 
 	j["owner"] = format_nation_link(state, owner);
 	j["state"] = format_state_link(state, sid);
@@ -248,6 +250,22 @@ json format_province(sys::state& state, dcon::province_id prov) {
 	j["population"]["aristocrat"] = num_aristocrat;
 
 	j["rgo"] = text::produce_simple_string(state, state.world.commodity_get_name(rgo));
+
+	json jlist = json::array();
+	for(const auto adj : state.world.province_get_province_adjacency(prov)) {
+		auto other = adj.get_connected_provinces(adj.get_connected_provinces(0) == prov ? 1 : 0);
+		auto jobj = format_province_link(state, other);
+		jobj["is_coastal"] = (adj.get_type() & province::border::coastal_bit) != 0;
+		jobj["is_passable"] = (adj.get_type() & province::border::impassible_bit) == 0;
+		jobj["is_strait"] = (adj.get_type() & province::border::non_adjacent_bit) != 0;
+		jobj["cross_river"] = (adj.get_type() & province::border::river_crossing_bit) != 0;
+		jobj["change_state"] = (adj.get_type() & province::border::state_bit) != 0;
+		jobj["change_nation"] = (adj.get_type() & province::border::national_bit) != 0;
+
+		jlist.push_back(jobj);
+	}
+
+	j["neighbours"] = jlist;
 
 	return j;
 }
@@ -270,6 +288,7 @@ json format_factory(sys::state& state, dcon::factory_id fid) {
 	auto location = state.world.factory_get_province_from_factory_location(fid);
 	auto owner = state.world.province_get_nation_from_province_ownership(location);
 	auto sid = state.world.province_get_state_membership(location);
+	auto market = state.world.state_instance_get_market_from_local_market(sid);
 
 	json j = json::object();
 
@@ -283,10 +302,10 @@ json format_factory(sys::state& state, dcon::factory_id fid) {
 	j["inputs"] = format_commodity_set(state, state.world.factory_type_get_inputs(type));
 	j["output"] = format_commodity_link(state, state.world.factory_type_get_output(type));
 
-	j["actual_production"] = state.world.factory_get_actual_production(fid);
-	j["level"] = state.world.factory_get_level(fid);
+	j["actual_production"] = state.world.factory_get_output(fid);
+	j["level"] = economy::get_factory_level(state, fid);
 	j["input_cost_per_worker"] = state.world.factory_get_input_cost_per_worker(fid);
-	j["output_cost_per_worker"] = state.world.factory_get_output_cost_per_worker(fid);
+	j["output_cost_per_worker"] = state.world.factory_get_output_per_worker(fid) * state.world.market_get_price(market, state.world.factory_type_get_output(type));
 
 	 j["unqualified_employment"] = state.world.factory_get_unqualified_employment(fid);
 	 j["primary_employment"] = state.world.factory_get_primary_employment(fid);

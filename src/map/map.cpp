@@ -509,7 +509,7 @@ void display_data::render(sys::state& state, glm::vec2 screen_size, glm::vec2 of
 	glViewport(0, 0, int(screen_size.x), int(screen_size.y));
 
 	glClearColor(0.5f, 0.5f, 0.5f, 1.f);
-	glClear(GL_COLOR_BUFFER_BIT);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	glActiveTexture(GL_TEXTURE12);
 	glBindTexture(GL_TEXTURE_2D, textures[texture_provinces]);
@@ -528,11 +528,16 @@ void display_data::render(sys::state& state, glm::vec2 screen_size, glm::vec2 of
 	glBindVertexArray(vao_array[vo_border]);
 	glBindBuffer(GL_ARRAY_BUFFER, vbo_array[vo_border]);
 
+	glEnable(GL_DEPTH_TEST);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glClearDepth(1.f);
+	glDepthFunc(GL_LESS);
+
 	for(auto b : borders) {
 		glUniform1f(shader_uniforms[shader_borders_provinces][uniform_width], 0.001f); // width
-		if(b.count < 50) {
-			glUniform1f(shader_uniforms[shader_borders_provinces][uniform_width], 0.0f); // width
-		}
+		//if(b.count < 50) {
+		//	glUniform1f(shader_uniforms[shader_borders_provinces][uniform_width], 0.0f); // width
+		//}
 		glDrawArrays(GL_TRIANGLE_STRIP, b.start_index, b.count / 2);
 		glDrawArrays(GL_TRIANGLE_STRIP, b.start_index + b.count / 2, b.count / 2);
 	}
@@ -546,6 +551,7 @@ void display_data::render(sys::state& state, glm::vec2 screen_size, glm::vec2 of
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 	}
 
+	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_CULL_FACE);
 
 	glActiveTexture(GL_TEXTURE0);
@@ -2842,12 +2848,19 @@ void display_data::load_map(sys::state& state) {
 
 	glGenTextures(1, &textures[texture_diag_border_identifier]);
 	if(textures[texture_diag_border_identifier]) {
+		assert(!diagonal_borders.empty());
+
 		glBindTexture(GL_TEXTURE_2D, textures[texture_diag_border_identifier]);
 		glTexStorage2D(GL_TEXTURE_2D, 1, GL_R8UI, size_x, size_y);
+		assert(size_x > 0);
+		assert(size_y > 0);
+		// assert(diagonal_borders.size() != size_x * size_y);
+		assert(size_x % 4 == 0); // The texture data might have incorrect row alignment (default is 4 bytes). If the texture width is not a multiple of 4, this can corrupt the upload.
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, size_x, size_y, GL_RED_INTEGER, GL_UNSIGNED_BYTE, diagonal_borders.data());
 		glBindTexture(GL_TEXTURE_2D, 0);
 	}
 	ogl::set_gltex_parameters(textures[texture_diag_border_identifier], GL_TEXTURE_2D, GL_NEAREST, GL_CLAMP_TO_EDGE);
+	
 
 	textures[texture_terrain] = ogl::make_gl_texture(&terrain_id_map[0], size_x, size_y, 1);
 	ogl::set_gltex_parameters(textures[texture_terrain], GL_TEXTURE_2D, GL_NEAREST, GL_CLAMP_TO_EDGE);
@@ -2884,19 +2897,19 @@ void display_data::load_map(sys::state& state) {
 	ogl::set_gltex_parameters(textures[texture_river_body], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT);
 
 	textures[texture_national_border] = load_dds_texture(assets_dir, NATIVE("nat_border.dds"));
-	ogl::set_gltex_parameters(textures[texture_national_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT);
+	ogl::set_gltex_parameters(textures[texture_national_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_CLAMP);
 
 	textures[texture_state_border] = load_dds_texture(assets_dir, NATIVE("state_border.dds"));
-	ogl::set_gltex_parameters(textures[texture_state_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT);
+	ogl::set_gltex_parameters(textures[texture_state_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_CLAMP);
 
 	textures[texture_prov_border] = load_dds_texture(assets_dir, NATIVE("prov_border.dds"));
 	ogl::set_gltex_parameters(textures[texture_prov_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_CLAMP);
 
 	textures[texture_imp_border] = load_dds_texture(assets_dir, NATIVE("imp_border.dds"));
-	ogl::set_gltex_parameters(textures[texture_imp_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT);
+	ogl::set_gltex_parameters(textures[texture_imp_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_CLAMP);
 
 	textures[texture_coastal_border] = load_dds_texture(assets_dir, NATIVE("coastborder.dds"));
-	ogl::set_gltex_parameters(textures[texture_coastal_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT);
+	ogl::set_gltex_parameters(textures[texture_coastal_border], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT, GL_CLAMP);
 
 	textures[texture_railroad] = load_dds_texture(gfx_anims_dir, NATIVE("railroad.dds"));
 	ogl::set_gltex_parameters(textures[texture_railroad], GL_TEXTURE_2D, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT);

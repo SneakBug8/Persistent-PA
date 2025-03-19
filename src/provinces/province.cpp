@@ -503,40 +503,6 @@ bool can_build_province_building(sys::state& state, dcon::province_id id, dcon::
 bool has_an_owner(sys::state& state, dcon::province_id id) {
 	return bool(dcon::fatten(state.world, id).get_nation_from_province_ownership());
 }
-float land_maximum_employment(sys::state& state, dcon::province_id id) {
-	auto owner = state.world.province_get_nation_from_province_ownership(id);
-	return economy::rgo_total_max_employment(state, owner, id) + economy::subsistence_max_pseudoemployment(state, owner, id);
-}
-float land_employment(sys::state& state, dcon::province_id id) {
-	auto owner = state.world.province_get_nation_from_province_ownership(id);
-	return economy::rgo_total_employment(state, owner, id) + state.world.province_get_subsistence_employment(id);
-}
-float rgo_maximum_employment(sys::state& state, dcon::province_id id) {
-	auto owner = state.world.province_get_nation_from_province_ownership(id);
-	return economy::rgo_total_max_employment(state, owner, id);
-}
-float rgo_employment(sys::state& state, dcon::province_id id) {
-	return economy::rgo_total_employment(state, state.world.province_get_nation_from_province_ownership(id), id);
-}
-float rgo_income(sys::state& state, dcon::province_id id) {
-	return state.world.province_get_rgo_full_output_cost(id);
-}
-float rgo_production_quantity(sys::state& state, dcon::province_id id, dcon::commodity_id c) {
-	auto n = state.world.province_get_nation_from_province_ownership(id);
-	return state.world.province_get_rgo_actual_production_per_good(id, c);
-}
-float rgo_size(sys::state& state, dcon::province_id prov_id) {
-	bool is_mine = state.world.commodity_get_is_mine(state.world.province_get_rgo(prov_id));
-	auto sz = state.world.province_get_rgo_size(prov_id);
-
-	auto n = dcon::fatten(state.world, prov_id).get_nation_from_province_ownership();
-	auto bonus = state.world.province_get_modifier_values(prov_id,
-									 is_mine ? sys::provincial_mod_offsets::mine_rgo_size : sys::provincial_mod_offsets::farm_rgo_size) +
-							 state.world.nation_get_modifier_values(n,
-									 is_mine ? sys::national_mod_offsets::mine_rgo_size : sys::national_mod_offsets::farm_rgo_size) +
-							 state.world.nation_get_rgo_size(n, state.world.province_get_rgo(prov_id)) + 1.0f;
-	return sz * bonus;
-}
 
 float state_accepted_bureaucrat_size(sys::state& state, dcon::state_instance_id id) {
 	float bsum = 0.f;
@@ -551,6 +517,7 @@ float state_accepted_bureaucrat_size(sys::state& state, dcon::state_instance_id 
 	return bsum;
 }
 
+/* Vanilla State Admin efficiency: used for integrating colonial states and thus still counts only accepted/primary culture bureaucrats */
 float state_admin_efficiency(sys::state& state, dcon::state_instance_id id) {
 	auto owner = state.world.state_instance_get_nation_from_state_ownership(id);
 
@@ -561,15 +528,18 @@ float state_admin_efficiency(sys::state& state, dcon::state_instance_id id) {
 		issue_sum += state.world.issue_option_get_administrative_multiplier(state.world.nation_get_issues(owner, i));
 	}
 	auto from_issues = issue_sum * state.defines.bureaucracy_percentage_increment + state.defines.max_bureaucracy_percentage;
-	float non_core_effect = 0.0f;
+	float side_effects = 0.0f;
 	float bsum = 0.0f;
 	for_each_province_in_state_instance(state, id, [&](dcon::province_id p) {
 		if(!state.world.province_get_is_owner_core(p)) {
-			non_core_effect += state.defines.noncore_tax_penalty;
+			side_effects += state.defines.noncore_tax_penalty;
+		}
+		if(state.world.province_get_nationalism(p) > 0.f) {
+			side_effects += state.defines.separatism_tax_penalty;
 		}
 		for(auto po : state.world.province_get_pop_location(p)) {
 			if(po.get_pop().get_is_primary_or_accepted_culture() &&
-					po.get_pop().get_poptype() == state.culture_definitions.bureaucrat) {
+					po.get_pop().get_poptype() == state.culture_definitions.bureaucrat && po.get_pop().get_rebel_faction_from_pop_rebellion_membership()) {
 				bsum += po.get_pop().get_size();
 			}
 		}
@@ -577,7 +547,7 @@ float state_admin_efficiency(sys::state& state, dcon::state_instance_id id) {
 	auto total_pop = state.world.state_instance_get_demographics(id, demographics::total);
 	auto total =
 			total_pop > 0
-					? std::clamp(admin_mod + non_core_effect + state.defines.base_country_admin_efficiency +
+					? std::clamp(admin_mod + side_effects + state.defines.base_country_admin_efficiency +
 													 std::min(state.culture_definitions.bureaucrat_tax_efficiency * bsum / total_pop, 1.0f) / from_issues,
 								0.0f, 1.0f)
 					: 0.0f;
@@ -775,22 +745,10 @@ void change_province_owner(sys::state& state, dcon::province_id id, dcon::nation
 				state.world.for_each_commodity([&](auto cid){
 					state.world.market_set_price(new_market, cid, state.world.market_get_price(old_market, cid));
 				});
-				for(auto index = 0; index < economy::labor::total; index++) {
-					state.world.market_set_labor_price(new_market, index, state.world.market_get_labor_price(old_market, index));
-				}
-				for(auto index = 0; index < economy::pop_labor::total; index++) {
-					state.world.market_set_pop_labor_distribution(new_market, index, state.world.market_get_pop_labor_distribution(old_market, index));
-				}
 			} else {
 				state.world.for_each_commodity([&](auto cid) {
 					state.world.market_set_price(new_market, cid, economy::median_price(state, cid));
 				});
-				for(auto index = 0; index < economy::labor::total; index++) {
-					state.world.market_set_labor_price(new_market, index, 1.f);
-				}
-				for(auto index = 0; index < economy::pop_labor::total; index++) {
-					state.world.market_set_pop_labor_distribution(new_market, index, 0.f);
-				}
 			}
 
 			auto new_local_market = state.world.force_create_local_market(new_market, new_si);
@@ -908,10 +866,9 @@ void change_province_owner(sys::state& state, dcon::province_id id, dcon::nation
 				for(int32_t i = 0; i < int32_t(fac_range.end() - fac_range.begin()); i++) {
 					const auto fac = *(fac_range.begin() + i);
 					if(fac.get_factory().get_building_type() == pfac.get_factory().get_building_type()) {
-						uint32_t old_level = uint32_t(pfac.get_factory().get_level());
-						uint32_t add_level = uint32_t(fac.get_factory().get_level());
-						uint32_t new_level = std::min(uint32_t(255), old_level + add_level);
-						pfac.get_factory().get_level() = uint8_t(new_level);
+						float old_size = pfac.get_factory().get_size();
+						float add_size = fac.get_factory().get_size();
+						pfac.get_factory().set_size(old_size + add_size);
 						state.world.delete_factory(fac.get_factory().id);
 						--i;
 					}
@@ -963,24 +920,19 @@ void change_province_owner(sys::state& state, dcon::province_id id, dcon::nation
 		for(auto p : state.world.province_get_pop_location(id)) {
 			rebel::remove_pop_from_movement(state, p.get_pop());
 			rebel::remove_pop_from_rebel_faction(state, p.get_pop());
-			if(new_owner) {
-				for(const auto src : p.get_pop().get_regiment_source()) {
-					if(!src.get_regiment().get_army_from_army_membership().get_is_retreating()
-					&& !src.get_regiment().get_army_from_army_membership().get_navy_from_army_transport()
-					&& !src.get_regiment().get_army_from_army_membership().get_battle_from_army_battle_participation()
-					&& !src.get_regiment().get_army_from_army_membership().get_controller_from_army_rebel_control()) {
-						auto new_u = fatten(state.world, state.world.create_army());
-						new_u.set_controller_from_army_control(new_owner);
-						src.get_regiment().set_army_from_army_membership(new_u);
-						military::army_arrives_in_province(state, new_u, id, military::crossing_type::none);
-					} else {
-						src.get_regiment().set_strength(0.f);
-					}
-				}
-			} else {
-				auto regs = p.get_pop().get_regiment_source();
-				while(regs.begin() != regs.end()) {
-					state.world.delete_regiment_source(*(regs.begin()));
+			for(const auto src : p.get_pop().get_regiment_source()) {
+				if(!src.get_regiment().get_army_from_army_membership().get_is_retreating()
+				&& !src.get_regiment().get_army_from_army_membership().get_navy_from_army_transport()
+				&& !src.get_regiment().get_army_from_army_membership().get_battle_from_army_battle_participation()
+				&& !src.get_regiment().get_army_from_army_membership().get_controller_from_army_rebel_control()) {
+					auto loc = src.get_regiment().get_army_from_army_membership().get_location_from_army_location();
+					auto new_u = fatten(state.world, state.world.create_army());
+					new_u.set_controller_from_army_control(new_owner);
+					src.get_regiment().set_army_from_army_membership(new_u);
+					src.get_regiment().set_org(0.01f);
+					military::army_arrives_in_province(state, new_u, loc, military::crossing_type::none);
+				} else {
+					src.get_regiment().set_strength(0.f);
 				}
 			}
 			auto lc = p.get_pop().get_province_land_construction();
@@ -1377,7 +1329,7 @@ bool can_start_colony(sys::state& state, dcon::nation_id n, dcon::state_definiti
 		for(auto p : state.world.nation_get_province_ownership(n)) {
 			if(auto nb_level = p.get_province().get_building_level(uint8_t(economy::province_building_type::naval_base)); nb_level > 0 && p.get_province().get_nation_from_province_control() == n) {
 				auto dist = province::direct_distance(state, p.get_province(), coastal_target);
-				if(dist <= province::world_circumference *  0.04f * nb_level) {
+				if(dist <= province::world_circumference *  state.defines.alice_naval_base_to_colonial_distance_factor * nb_level) {
 					reachable_by_sea = true;
 					break;
 				}
@@ -1610,7 +1562,19 @@ void update_colonization(sys::state& state) {
 
 			float adjust = state.defines.colonization_influence_temperature_per_day +
 										 float(max_points) * state.defines.colonization_influence_temperature_per_level +
-										 (state.current_crisis_state == sys::crisis_state::inactive ? state.defines.tension_while_crisis : 0.0f) + at_war_adjust;
+										 (state.current_crisis_state == sys::crisis_state::inactive ? 0.0f : state.defines.tension_while_crisis) + at_war_adjust;
+
+			bool anyone_has_army = false;
+			for(auto c : colonizers) {
+				if(c.get_colonizer().get_is_great_power())
+					adjust *= 1.5f;
+
+				if(c.get_colonizer().get_active_regiments())
+					anyone_has_army = true;
+			}
+
+			if(!anyone_has_army)
+				adjust *= 0.f;
 
 			d.set_colonization_temperature(std::clamp(d.get_colonization_temperature() + adjust, 0.0f, 100.0f));
 		} else if(num_colonizers == 1 &&
@@ -1733,6 +1697,21 @@ void remove_core(sys::state& state, dcon::province_id prov, dcon::national_ident
 void set_rgo(sys::state& state, dcon::province_id prov, dcon::commodity_id c) {
 	auto old_rgo = state.world.province_get_rgo(prov);
 	state.world.province_set_rgo(prov, c);
+	auto next_size = state.world.province_get_rgo_base_size(prov) * 0.4f;
+	float pop_amount = 0.0f;
+	for(auto pt : state.world.in_pop_type) {
+		if(pt == state.culture_definitions.slaves) {
+			pop_amount += state.world.province_get_demographics(prov, demographics::to_key(state, state.culture_definitions.slaves));
+		} else if(pt.get_is_paid_rgo_worker()) {
+			pop_amount += state.world.province_get_demographics(prov, demographics::to_key(state, pt));
+		}
+	}
+	if(pop_amount * 5.f < next_size) {
+		next_size = pop_amount * 5.f;
+	}
+	state.world.province_get_rgo_size(prov, c) += next_size;
+	state.world.province_get_rgo_max_size(prov, c) += next_size;
+	state.world.province_set_rgo_efficiency(prov, c, 1.f);
 	if(state.world.commodity_get_is_mine(old_rgo) != state.world.commodity_get_is_mine(c)) {
 		if(state.world.commodity_get_is_mine(c)) {
 			for(auto pop : state.world.province_get_pop_location(prov)) {

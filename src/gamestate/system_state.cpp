@@ -405,10 +405,12 @@ void state::on_resize(int32_t x, int32_t y, window::window_state win_state) {
 void state::on_mouse_wheel(int32_t x, int32_t y, key_modifiers mod, float amount) { // an amount of 1.0 is one "click" of the wheel
 	//update en demand
 	ui::element_base* root_elm = current_scene.get_root(*this);
-	ui_state.scroll_target = root_elm->impl_probe_mouse(*this,
+	auto probe_result = root_elm->impl_probe_mouse(*this,
 		int32_t(mouse_x_position / user_settings.ui_scale),
 		int32_t(mouse_y_position / user_settings.ui_scale),
-		ui::mouse_probe_type::scroll).under_mouse;
+		ui::mouse_probe_type::scroll);
+
+	ui_state.scroll_target = probe_result.under_mouse;
 
 	auto belongs_on_map = [&](ui::element_base* b) {
 		while(b != nullptr) {
@@ -422,7 +424,7 @@ void state::on_mouse_wheel(int32_t x, int32_t y, key_modifiers mod, float amount
 		};
 
 	if(ui_state.scroll_target != nullptr) {
-		ui_state.scroll_target->impl_on_scroll(*this, ui_state.relative_mouse_location.x, ui_state.relative_mouse_location.y, amount, mod);
+		ui_state.scroll_target->impl_on_scroll(*this, probe_result.relative_location.x, probe_result.relative_location.y, amount, mod);
 	} else if(ui_state.under_mouse == nullptr || belongs_on_map(ui_state.under_mouse)) {
 		map_state.on_mouse_wheel(x, y, x_size, y_size, mod, amount);
 
@@ -535,8 +537,8 @@ void state::render() { // called to render the frame may (and should) delay retu
 	ui::urect tooltip_bounds;
 	int32_t tooltip_sub_index = -1;
 	if(tooltip_probe.under_mouse) {
-		tooltip_probe.under_mouse->tooltip_position(*this, int32_t(mouse_x_position / user_settings.ui_scale),
-		int32_t(mouse_y_position / user_settings.ui_scale), tooltip_sub_index, tooltip_bounds);
+		tooltip_probe.under_mouse->tooltip_position(*this, tooltip_probe.relative_location.x,
+		tooltip_probe.relative_location.y, tooltip_sub_index, tooltip_bounds);
 	}
 
 	if(game_state_was_updated) {
@@ -2340,7 +2342,14 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 		}
 	});
 
-	world.province_resize_rgo_max_size_per_good(world.commodity_size());
+	world.province_resize_rgo_size(world.commodity_size());
+	world.province_resize_rgo_potential(world.commodity_size());
+	world.province_resize_rgo_efficiency(world.commodity_size());
+	world.province_resize_rgo_target_employment(world.commodity_size());
+	world.province_resize_rgo_output(world.commodity_size());
+	world.province_resize_rgo_output_per_worker(world.commodity_size());
+	world.province_resize_rgo_max_size(world.commodity_size());
+	world.province_resize_factory_max_size(world.commodity_size());
 
 	// load province history files
 	auto history = open_directory(root, NATIVE("history"));
@@ -2376,7 +2385,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 				}
 
 				err.file_name = simple_fs::native_to_utf8(get_full_name(prov_file));
-				auto province_id = parsers::parse_int(std::string_view(value_start, value_end), 0, err);
+				auto province_id = parsers::parse_uint(std::string_view(value_start, value_end), 0, err);
 				if(province_id > 0 && uint32_t(province_id) < context.original_id_to_prov_id_map.size()) {
 					auto opened_file = open_file(prov_file);
 					if(opened_file) {
@@ -2385,6 +2394,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 						auto content = view_contents(*opened_file);
 						parsers::token_generator gen(content.data, content.data + content.file_size);
 						parsers::parse_province_history_file(gen, err, pf_context);
+						context.state.world.province_set_provid(pid, province_id);
 					}
 				}
 			}
@@ -2866,9 +2876,6 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 	world.nation_resize_demographics(demographics::size(*this));
 	world.state_instance_resize_demographics(demographics::size(*this));
 	world.province_resize_demographics(demographics::size(*this));
-	world.province_resize_rgo_profit_per_good(world.commodity_size());
-	world.province_resize_rgo_actual_production_per_good(world.commodity_size());
-	world.province_resize_rgo_target_employment_per_good(world.commodity_size());
 
 	world.trade_route_resize_volume(world.commodity_size());
 	world.nation_resize_factory_type_experience(world.factory_type_size());
@@ -2905,12 +2912,12 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 	world.market_resize_everyday_needs_weights(world.commodity_size());
 	world.market_resize_luxury_needs_weights(world.commodity_size());
 
-	world.market_resize_labor_price(economy::labor::total);
-	world.market_resize_labor_supply(economy::labor::total);
-	world.market_resize_labor_demand(economy::labor::total);
-	world.market_resize_labor_demand_satisfaction(economy::labor::total);
-	world.market_resize_labor_supply_sold(economy::labor::total);
-	world.market_resize_pop_labor_distribution(economy::pop_labor::total);
+	world.province_resize_labor_price(economy::labor::total);
+	world.province_resize_labor_supply(economy::labor::total);
+	world.province_resize_labor_demand(economy::labor::total);
+	world.province_resize_labor_demand_satisfaction(economy::labor::total);
+	world.province_resize_labor_supply_sold(economy::labor::total);
+	world.province_resize_pop_labor_distribution(economy::pop_labor::total);
 
 	world.nation_resize_stockpile_targets(world.commodity_size());
 	world.nation_resize_drawing_on_stockpiles(world.commodity_size());
@@ -3262,7 +3269,7 @@ void state::load_scenario_data(parsers::error_handler& err, sys::year_month_day 
 	military::regenerate_ship_scores(*this);
 	nations::update_industrial_scores(*this);
 	military::update_naval_supply_points(*this);
-	economy::update_factory_employment(*this);
+	economy::update_employment(*this);
 	nations::update_military_scores(*this); // depends on ship score, land unit average
 	nations::update_rankings(*this);		// depends on industrial score, military scores
 
@@ -4109,7 +4116,7 @@ void state::single_game_tick() {
 
 	concurrency::parallel_invoke([&]() {
 		// values updates pass 1 (mostly trivial things, can be done in parallel)
-		concurrency::parallel_for(0, 17, [&](int32_t index) {
+		concurrency::parallel_for(0, 15, [&](int32_t index) {
 			switch(index) {
 			case 0:
 				ai::refresh_home_ports(*this);
@@ -4119,7 +4126,7 @@ void state::single_game_tick() {
 				for(auto n : this->cheat_data.instant_research_nations) {
 					auto tech = this->world.nation_get_current_research(n);
 					if(tech.is_valid()) {
-						float points = culture::effective_technology_cost(*this, this->current_date.to_ymd(this->start_date).year, n, tech);
+						float points = culture::effective_technology_rp_cost(*this, this->current_date.to_ymd(this->start_date).year, n, tech);
 						this->world.nation_set_research_points(n, points);
 					}
 				}
@@ -4132,42 +4139,37 @@ void state::single_game_tick() {
 				military::regenerate_ship_scores(*this);
 				break;
 			case 4:
-				nations::update_industrial_scores(*this);
-				break;
-			case 5:
 				military::update_naval_supply_points(*this);
 				break;
-			case 6:
+			case 5:
 				military::update_all_recruitable_regiments(*this);
 				break;
-			case 7:
+			case 6:
 				military::regenerate_total_regiment_counts(*this);
 				break;
+			case 7:
+				economy::update_employment(*this);
+				break;
 			case 8:
-				break;
-			case 9:
-				economy::update_factory_employment(*this);
-				break;
-			case 10:
 				nations::update_administrative_efficiency(*this);
 				rebel::daily_update_rebel_organization(*this);
 				break;
-			case 11:
+			case 9:
 				military::daily_leaders_update(*this);
 				break;
-			case 12:
+			case 10:
 				politics::daily_party_loyalty_update(*this);
 				break;
-			case 13:
+			case 11:
 				nations::daily_update_flashpoint_tension(*this);
 				break;
-			case 14:
+			case 12:
 				military::update_ticking_war_score(*this);
 				break;
-			case 15:
+			case 13:
 				military::increase_dig_in(*this);
 				break;
-			case 16:
+			case 14:
 				military::update_blockade_status(*this);
 				break;
 			}
@@ -4194,6 +4196,7 @@ void state::single_game_tick() {
 
 		culture::update_research(*this, uint32_t(ymd_date.year));
 
+		nations::update_industrial_scores(*this);
 		nations::update_military_scores(*this); // depends on ship score, land unit average
 		nations::update_rankings(*this);				// depends on industrial score, military scores
 		nations::update_great_powers(*this);		// depends on rankings

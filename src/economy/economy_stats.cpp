@@ -3,6 +3,249 @@
 
 namespace economy {
 
+ve::fp_vector ve_price(
+	sys::state const& state,
+	ve::contiguous_tags<dcon::market_id> s,
+	dcon::commodity_id c
+) {
+	return state.world.market_get_price(s, c);
+}
+ve::fp_vector ve_price(
+	sys::state const& state,
+	ve::partial_contiguous_tags<dcon::market_id> s,
+	dcon::commodity_id c
+) {
+	return state.world.market_get_price(s, c);
+}
+ve::fp_vector ve_price(
+	sys::state const& state,
+	ve::tagged_vector<dcon::market_id> s,
+	dcon::commodity_id c
+) {
+	return state.world.market_get_price(s, c);
+}
+
+void register_demand(
+	sys::state& state,
+	dcon::market_id s,
+	dcon::commodity_id commodity_type,
+	float amount,
+	economy_reason reason
+) {
+	assert(amount >= 0.f);
+	state.world.market_get_demand(s, commodity_type) += amount;
+	assert(std::isfinite(state.world.market_get_demand(s, commodity_type)));
+}
+
+void register_demand(
+	sys::state& state,
+	ve::contiguous_tags<dcon::market_id> s,
+	dcon::commodity_id commodity_type,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	ve::apply(
+		[](float amount) {
+			assert(std::isfinite(amount) && amount >= 0.f);
+		}, amount
+	);
+	state.world.market_set_demand(
+		s,
+		commodity_type,
+		state.world.market_get_demand(s, commodity_type) + amount
+	);
+	ve::apply(
+		[](float demand) {
+			assert(std::isfinite(demand) && demand >= 0.f);
+		}, state.world.market_get_demand(s, commodity_type)
+			);
+}
+void register_demand(
+	sys::state& state,
+	ve::partial_contiguous_tags<dcon::market_id> s,
+	dcon::commodity_id commodity_type,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	ve::apply(
+		[](float amount) {
+			assert(std::isfinite(amount) && amount >= 0.f);
+		}, amount
+	);
+	state.world.market_set_demand(
+		s,
+		commodity_type,
+		state.world.market_get_demand(s, commodity_type) + amount
+	);
+	ve::apply(
+		[](float demand) {
+			assert(std::isfinite(demand) && demand >= 0.f);
+		}, state.world.market_get_demand(s, commodity_type)
+			);
+}
+void register_demand(
+	sys::state& state,
+	ve::tagged_vector<dcon::market_id> s,
+	dcon::commodity_id commodity_type,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	ve::apply(
+		[](float amount) {
+			assert(std::isfinite(amount) && amount >= 0.f);
+		}, amount
+	);
+	state.world.market_set_demand(
+		s,
+		commodity_type,
+		state.world.market_get_demand(s, commodity_type) + amount
+	);
+	ve::apply(
+		[](float demand) {
+			assert(std::isfinite(demand) && demand >= 0.f);
+		}, state.world.market_get_demand(s, commodity_type)
+			);
+}
+
+void register_intermediate_demand(
+	sys::state& state,
+	ve::contiguous_tags<dcon::market_id> s,
+	dcon::commodity_id c,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	register_demand(state, s, c, amount, reason);
+	state.world.market_set_intermediate_demand(
+		s,
+		c,
+		state.world.market_get_intermediate_demand(s, c) + amount
+	);
+	auto local_price = ve_price(state, s, c);
+	auto sat = state.world.market_get_demand_satisfaction(s, c);
+	state.world.market_set_gdp(s, state.world.market_get_gdp(s) - amount * local_price * sat);
+}
+void register_intermediate_demand(
+	sys::state& state,
+	ve::partial_contiguous_tags<dcon::market_id> s,
+	dcon::commodity_id c,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	register_demand(state, s, c, amount, reason);
+	state.world.market_set_intermediate_demand(
+		s,
+		c,
+		state.world.market_get_intermediate_demand(s, c) + amount
+	);
+	auto local_price = ve_price(state, s, c);
+	auto sat = state.world.market_get_demand_satisfaction(s, c);
+	state.world.market_set_gdp(s, state.world.market_get_gdp(s) - amount * local_price * sat);
+}
+void register_intermediate_demand(
+	sys::state& state,
+	ve::tagged_vector<dcon::market_id> s,
+	dcon::commodity_id c,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	register_demand(state, s, c, amount, reason);
+	state.world.market_set_intermediate_demand(
+		s,
+		c,
+		state.world.market_get_intermediate_demand(s, c) + amount
+	);
+	auto local_price = ve_price(state, s, c);
+	auto sat = state.world.market_get_demand_satisfaction(s, c);
+	state.world.market_set_gdp(s, state.world.market_get_gdp(s) - amount * local_price * sat);
+}
+
+void register_intermediate_demand(
+	sys::state& state,
+	dcon::market_id s,
+	dcon::commodity_id c,
+	float amount,
+	economy_reason reason
+) {
+	register_demand(state, s, c, amount, reason);
+	state.world.market_set_intermediate_demand(
+		s,
+		c,
+		state.world.market_get_intermediate_demand(s, c) + amount
+	);
+	auto local_price = price(state, s, c);
+	auto sat = state.world.market_get_demand_satisfaction(s, c);
+	state.world.market_set_gdp(s, state.world.market_get_gdp(s) - amount * local_price * sat);
+}
+
+void register_domestic_supply(
+	sys::state& state,
+	dcon::market_id s,
+	dcon::commodity_id commodity_type,
+	float amount,
+	economy_reason reason
+) {
+	state.world.market_get_supply(s, commodity_type) += amount;
+	state.world.market_get_gdp(s) += amount * price(state, s, commodity_type);
+}
+
+void register_foreign_supply(
+	sys::state& state,
+	dcon::market_id s,
+	dcon::commodity_id commodity_type,
+	float amount,
+	economy_reason reason
+) {
+	state.world.market_get_supply(s, commodity_type) += amount;
+}
+
+template<typename T>
+void ve_register_domestic_supply(
+	sys::state& state,
+	T s,
+	dcon::commodity_id commodity_type,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	state.world.market_set_supply(
+		s,
+		commodity_type,
+		state.world.market_get_supply(s, commodity_type) + amount
+	);
+	state.world.market_set_gdp(
+		s,
+		state.world.market_get_gdp(s)
+		+ amount * ve_price(state, s, commodity_type)
+	);
+}
+
+void register_domestic_supply(
+	sys::state& state,
+	ve::contiguous_tags<dcon::market_id> s,
+	dcon::commodity_id commodity_type,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	ve_register_domestic_supply(state, s, commodity_type, amount, reason);
+}
+void register_domestic_supply(
+	sys::state& state,
+	ve::partial_contiguous_tags<dcon::market_id> s,
+	dcon::commodity_id commodity_type,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	ve_register_domestic_supply(state, s, commodity_type, amount, reason);
+}
+void register_domestic_supply(
+	sys::state& state,
+	ve::tagged_vector<dcon::market_id> s,
+	dcon::commodity_id commodity_type,
+	ve::fp_vector amount,
+	economy_reason reason
+) {
+	ve_register_domestic_supply(state, s, commodity_type, amount, reason);
+}
+
 float price(sys::state const& state, dcon::state_instance_id s, dcon::commodity_id c) {
 	auto market = state.world.state_instance_get_market_from_local_market(s);
 	return state.world.market_get_price(market, c);
@@ -342,14 +585,63 @@ float average_capitalists_luxury_cost(
 	return total / count;
 }
 
+float inline market_speculation_budget(
+	sys::state const& state,
+	dcon::market_id m,
+	dcon::commodity_id c
+) {
+	auto sid = state.world.market_get_zone_from_local_market(m);
+	auto capital = state.world.state_instance_get_capital(sid);
+	auto population = state.world.state_instance_get_demographics(sid, demographics::total);
+	auto wage = state.world.province_get_labor_price(capital, labor::no_education);
+	auto local_speculation_budget = wage * population;
+	return local_speculation_budget;
+}
+template<typename M>
+ve::fp_vector market_speculation_budget(
+	sys::state const& state,
+	M m,
+	dcon::commodity_id c
+) {
+	auto sid = state.world.market_get_zone_from_local_market(m);
+	auto capital = state.world.state_instance_get_capital(sid);
+	auto population = state.world.state_instance_get_demographics(sid, demographics::total);
+	auto wage = state.world.province_get_labor_price(capital, labor::no_education);
+	auto local_speculation_budget = wage * population / 10.f;
+	return local_speculation_budget;
+}
+ve::fp_vector ve_market_speculation_budget(
+	sys::state const& state,
+	ve::contiguous_tags<dcon::market_id> m,
+	dcon::commodity_id c
+) {
+	return market_speculation_budget<ve::contiguous_tags<dcon::market_id>>(state, m, c);
+}
+ve::fp_vector ve_market_speculation_budget(
+	sys::state const& state,
+	ve::partial_contiguous_tags<dcon::market_id> m,
+	dcon::commodity_id c
+) {
+	return market_speculation_budget<ve::partial_contiguous_tags<dcon::market_id>>(state, m, c);
+}
+ve::fp_vector ve_market_speculation_budget(
+	sys::state const& state,
+	ve::tagged_vector<dcon::market_id> m,
+	dcon::commodity_id c
+) {
+	return market_speculation_budget<ve::tagged_vector<dcon::market_id>>(state, m, c);
+}
 
 float trade_supply(sys::state& state,
 	dcon::market_id m,
 	dcon::commodity_id c
 ) {
 	auto stockpiles = state.world.market_get_stockpile(m, c);
-	auto stockpile_target_merchants = stockpile_expected_spending_per_commodity / (price(state, m, c) + 1.f);
-	auto local_wage_rating = state.defines.alice_needs_scaling_factor * state.world.market_get_labor_price(m, labor::no_education) + 0.00001f;
+	auto stockpile_target_merchants = market_speculation_budget(state, m, c) / (price(state, m, c) + 1.f);
+	auto sid = state.world.market_get_zone_from_local_market(m);
+	auto capital = state.world.state_instance_get_capital(sid);
+	auto wage = state.world.province_get_labor_price(capital, labor::no_education);
+	auto local_wage_rating = state.defines.alice_needs_scaling_factor * wage + 0.00001f;
 	auto price_rating = (price(state, m, c)) / local_wage_rating;
 	auto actual_stockpile_to_supply = std::min(1.f, stockpile_to_supply + price_rating);
 	auto result = std::max(0.f, stockpiles - stockpile_target_merchants) * actual_stockpile_to_supply;
@@ -375,8 +667,11 @@ float trade_demand(sys::state& state,
 	dcon::commodity_id c
 ) {
 	auto stockpiles = state.world.market_get_stockpile(m, c);
-	auto stockpile_target_merchants = stockpile_expected_spending_per_commodity / (price(state, m, c) + 1.f);
-	auto local_wage_rating = state.defines.alice_needs_scaling_factor * state.world.market_get_labor_price(m, labor::no_education) + 0.00001f;
+	auto stockpile_target_merchants = market_speculation_budget(state, m, c) / (price(state, m, c) + 1.f);
+	auto sid = state.world.market_get_zone_from_local_market(m);
+	auto capital = state.world.state_instance_get_capital(sid);
+	auto wage = state.world.province_get_labor_price(capital, labor::no_education);
+	auto local_wage_rating = state.defines.alice_needs_scaling_factor * wage + 0.00001f;
 	auto price_rating = (price(state, m, c)) / local_wage_rating;
 	auto actual_stockpile_to_supply = std::min(1.f, stockpile_to_supply + price_rating);
 	auto result = std::max(0.f, stockpile_target_merchants - stockpiles) * actual_stockpile_to_supply;
@@ -672,4 +967,102 @@ trade_volume_data_detailed import_volume_detailed(
 
 	return result;
 }
+
+float get_factory_level(sys::state& state, dcon::factory_id f) {
+	auto ftid = state.world.factory_get_building_type(f);
+	return state.world.factory_get_size(f) / state.world.factory_type_get_base_workforce(ftid);
+}
+
+int32_t province_factory_count(sys::state& state, dcon::province_id pid) {
+	int32_t num_factories = 0;
+	num_factories += int32_t(state.world.province_get_factory_location(pid).end() - state.world.province_get_factory_location(pid).begin());
+	for(auto p : state.world.province_get_factory_construction(pid))
+		if(p.get_is_upgrade() == false)
+			++num_factories;
+
+	// For new factories: no more than defines:FACTORIES_PER_STATE existing + under construction new factories must be
+	assert(num_factories <= int32_t(state.defines.factories_per_state));
+	return num_factories;
+}
+// Returns sum of all factory levels in a province
+float province_factory_level(sys::state& state, dcon::province_id pid) {
+	float factory_size = 0;
+	for(auto fl : state.world.province_get_factory_location(pid)) {
+		factory_size += get_factory_level(state, fl.get_factory());
+	}
+	return factory_size;
+}
+
+int32_t state_factory_count(sys::state& state, dcon::state_instance_id sid, dcon::nation_id n) {
+	int32_t num_factories = 0;
+	auto d = state.world.state_instance_get_definition(sid);
+	for(auto p : state.world.state_definition_get_abstract_state_membership(d))
+		if(p.get_province().get_nation_from_province_ownership() == n)
+			num_factories += province_factory_count(state, p.get_province());
+	return num_factories;
+}
+// Returns sum of all factory levels in a state
+float state_factory_level(sys::state& state, dcon::state_instance_id sid, dcon::nation_id n) {
+	float factory_size = 0;
+	auto d = state.world.state_instance_get_definition(sid);
+	for(auto p : state.world.state_definition_get_abstract_state_membership(d))
+		if(p.get_province().get_nation_from_province_ownership() == n)
+			factory_size += province_factory_level(state, p.get_province());
+	return factory_size;
+}
+
+bool has_factory(sys::state const& state, dcon::province_id si) {
+	auto crng = state.world.province_get_factory_construction(si);
+	auto rng = state.world.province_get_factory_location(si);
+	if((crng.begin() != crng.end()) || (rng.begin() != rng.end()))
+		return true;
+	return false;
+}
+
+bool has_factory(sys::state const& state, dcon::state_instance_id sid) {
+	auto d = state.world.state_instance_get_definition(sid);
+	for(auto p : state.world.state_definition_get_abstract_state_membership(d))
+		if(p.get_province().get_state_membership() == sid) {
+			if(has_factory(state, p.get_province()))
+				return true;
+		}
+	return false;
+}
+
+
+bool has_constructed_factory(sys::state& state, dcon::state_instance_id s, dcon::factory_type_id ft) {
+	auto d = state.world.state_instance_get_definition(s);
+	for(auto p : state.world.state_definition_get_abstract_state_membership(d)) {
+		if(p.get_province().get_state_membership() == s) {
+			for(auto f : p.get_province().get_factory_location()) {
+				if(f.get_factory().get_building_type() == ft)
+					return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool has_factory(sys::state& state, dcon::state_instance_id s, dcon::factory_type_id ft) {
+	auto d = state.world.state_instance_get_definition(s);
+
+	for(auto p : state.world.state_definition_get_abstract_state_membership(d)) {
+		if(p.get_province().get_state_membership() == s) {
+			for(auto f : p.get_province().get_factory_location()) {
+				if(f.get_factory().get_building_type() == ft)
+					return true;
+			}
+		}
+	}
+	for(auto p : state.world.state_definition_get_abstract_state_membership(d)) {
+		if(p.get_province().get_state_membership() == s) {
+			for(auto f : p.get_province().get_factory_construction()) {
+				if(f.get_type() == ft)
+					return true;
+			}
+		}
+	}
+	return false;
+}
+
 }

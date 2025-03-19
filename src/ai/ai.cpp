@@ -2,6 +2,8 @@
 #include "system_state.hpp"
 #include "demographics.hpp"
 #include "economy_stats.hpp"
+#include "economy_production.hpp"
+#include "construction.hpp"
 #include "effects.hpp"
 #include "gui_effect_tooltips.hpp"
 #include "math_fns.hpp"
@@ -127,9 +129,42 @@ void update_ai_general_status(sys::state& state) {
 	}
 }
 
+bool naval_supremacy(sys::state& state, dcon::nation_id n, dcon::nation_id target) {
+	auto self_sup = state.world.nation_get_used_naval_supply_points(n);
+
+	auto real_target = state.world.overlord_get_ruler(state.world.nation_get_overlord_as_subject(target));
+	if(!real_target)
+		real_target = target;
+
+	if(self_sup <= state.world.nation_get_used_naval_supply_points(real_target))
+		return false;
+
+	if(self_sup <= state.world.nation_get_in_sphere_of(real_target).get_used_naval_supply_points())
+		return false;
+
+	for(auto a : state.world.nation_get_diplomatic_relation(real_target)) {
+		if(!a.get_are_allied())
+			continue;
+		auto other = a.get_related_nations(0) != real_target ? a.get_related_nations(0) : a.get_related_nations(1);
+		if(self_sup <= other.get_used_naval_supply_points())
+			return false;
+	}
+
+	return true;
+}
+
 static void internal_get_alliance_targets_by_adjacency(sys::state& state, dcon::nation_id n, dcon::nation_id adj, std::vector<dcon::nation_id>& alliance_targets) {
 	for(auto nb : state.world.nation_get_nation_adjacency(adj)) {
 		auto other = nb.get_connected_nations(0) != adj ? nb.get_connected_nations(0) : nb.get_connected_nations(1);
+
+		auto our_strength = estimate_strength(state, n);
+		auto other_strength = estimate_strength(state, other);
+
+		// We really shouldn't ally very weak neighbours
+		// Surrounding ourselves with useless alliances stops expansion
+		if(other_strength <= our_strength * 0.2f) {
+			continue;
+		}
 
 		bool b = other.get_is_player_controlled()
 			? state.world.unilateral_relationship_get_interested_in_alliance(state.world.get_unilateral_relationship_by_unilateral_pair(n, other))
@@ -145,7 +180,7 @@ static void internal_get_alliance_targets(sys::state& state, dcon::nation_id n, 
 	if(!alliance_targets.empty())
 		return;
 
-	// Adjacency with rival (useful for e.x, Chile allying Paraguay to fight bolivia)
+	// Adjacency with rival (useful for e.x, Chile allying Paraguay to fight Bolivia)
 	if(auto rival = state.world.nation_get_ai_rival(n); bool(rival)) {
 		internal_get_alliance_targets_by_adjacency(state, n, rival, alliance_targets);
 		if(!alliance_targets.empty())
@@ -442,6 +477,10 @@ void update_ai_research(sys::state& state) {
 				continue; // Already researched
 
 			if(state.current_date.to_ymd(state.start_date).year >= state.world.technology_get_year(tid)) {
+				// Research military doctrines only if can research it immediately
+				if(culture::effective_technology_lp_cost(state, year, n, tid) > state.world.nation_get_leadership_points(n)) {
+					continue;
+				}
 				// Find previous technology before this one
 				dcon::technology_id prev_tech = dcon::technology_id(dcon::technology_id::value_base_t(tid.id.index() - 1));
 				// Previous technology is from the same folder so we have to check that we have researched it beforehand
@@ -474,7 +513,7 @@ void update_ai_research(sys::state& state) {
 				base *= 2.0f;
 			}
 
-			auto cost = std::max(1.0f, culture::effective_technology_cost(state, year, n, pt.id));
+			auto cost = std::max(1.0f, culture::effective_technology_rp_cost(state, year, n, pt.id));
 			pt.weight = base / cost;
 		}
 		auto rval = rng::get_random(state, id);
@@ -556,10 +595,8 @@ void update_factory_types_priority(sys::state& state) {
 			state.world.province_for_each_factory_location_as_province(province, [&](auto location) {
 				auto factory = state.world.factory_location_get_factory(location);
 				auto type = state.world.factory_get_building_type(factory);
-				auto level = state.world.factory_get_level(factory);
 				employment[type.id.index()] +=
 					state.world.factory_get_primary_employment(factory)
-					* level
 					* economy::factory_type_input_cost(
 						state, n, market, type
 					);
@@ -1115,7 +1152,7 @@ void update_ai_ruling_party(sys::state& state) {
 				}
 			}
 
-			assert(target != state.world.nation_get_ruling_party(n));
+			assert(target != state.world.nation_get_ruling_party(n)); // Fires if some nation has no available parties
 			if(target) {
 				politics::appoint_ruling_party(state, n, target);
 			}
@@ -1123,22 +1160,30 @@ void update_ai_ruling_party(sys::state& state) {
 	}
 }
 
-void get_craved_factory_types(sys::state& state, dcon::nation_id nid, dcon::market_id mid, std::vector<dcon::factory_type_id>& desired_types) {
+void get_craved_factory_types(sys::state& state, dcon::nation_id nid, dcon::market_id mid, dcon::province_id pid, std::vector<dcon::factory_type_id>& desired_types) {
 	assert(desired_types.empty());
 	auto n = dcon::fatten(state.world, nid);
 	auto m = dcon::fatten(state.world, mid);
+	auto sid = m.get_zone_from_local_market();
 
 	auto const tax_eff = nations::tax_efficiency(state, n);
 	auto const rich_effect = (1.0f - tax_eff * float(state.world.nation_get_rich_tax(n)) / 100.0f);
+	auto wage = state.world.province_get_labor_price(pid, economy::labor::basic_education) * 2.f;
 
 	if(desired_types.empty()) {
 		for(auto type : state.world.in_factory_type) {
 			if(n.get_active_building(type) || type.get_is_available_from_start()) {
+				// Check rules for factories in colonies
+				if(sid.get_capital().get_is_colonial() && (state.defines.alice_disallow_factories_in_colonies != 0.f || !type.get_can_be_built_in_colonies())) {
+					continue;
+				}
+
+
 				float cost = economy::factory_type_build_cost(state, n, m, type);
 				float output = economy::factory_type_output_cost(state, n, m, type);
 				float input = economy::factory_type_input_cost(state, n, m, type);
 
-				auto profit = (output - input) * (1.0f - rich_effect);
+				auto profit = (output - input - wage * type.get_base_workforce()) * (1.0f - rich_effect);
 				auto roi = profit / cost;
 
 				if(profit / input > 10.f && roi > 0.01f)
@@ -1148,13 +1193,15 @@ void get_craved_factory_types(sys::state& state, dcon::nation_id nid, dcon::mark
 	}
 }
 
-void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::market_id mid, std::vector<dcon::factory_type_id>& desired_types) {
+void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::market_id mid, dcon::province_id pid, std::vector<dcon::factory_type_id>& desired_types) {
 	assert(desired_types.empty());
 	auto n = dcon::fatten(state.world, nid);
 	auto m = dcon::fatten(state.world, mid);
+	auto sid = m.get_zone_from_local_market();
 
 	auto const tax_eff = nations::tax_efficiency(state, n);
 	auto const rich_effect = (1.0f - tax_eff * float(state.world.nation_get_rich_tax(n)) / 100.0f);
+	auto wage = state.world.province_get_labor_price(pid, economy::labor::basic_education) * 2.f;
 
 	// pass zero:
 	// factories with stupid income margins
@@ -1162,6 +1209,12 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 	if(desired_types.empty()) {
 		for(auto type : state.world.in_factory_type) {
 			if(n.get_active_building(type) || type.get_is_available_from_start()) {
+
+				// Check rules for factories in colonies
+				if(sid.get_capital().get_is_colonial() && (state.defines.alice_disallow_factories_in_colonies != 0.f || !type.get_can_be_built_in_colonies())) {
+					continue;
+				}
+
 				auto& inputs = type.get_inputs();
 				bool lacking_input = false;
 				bool lacking_output = m.get_demand_satisfaction(type.get_output()) < 0.98f;
@@ -1191,7 +1244,7 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 				float output = economy::factory_type_output_cost(state, n, m, type);
 				float input = economy::factory_type_input_cost(state, n, m, type) + 0.1f;
 
-				auto profit = (output - input) * (1.0f - rich_effect);
+				auto profit = (output - input - wage * type.get_base_workforce()) * (1.0f - rich_effect);
 				auto roi = profit / cost;
 
 				if(!lacking_constr && profit / input > 2.f && roi > 0.01f)
@@ -1205,6 +1258,12 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 	if(desired_types.empty()) { 
 		for(auto type : state.world.in_factory_type) {
 			if(n.get_active_building(type) || type.get_is_available_from_start()) {
+
+				// Check rules for factories in colonies
+				if(sid.get_capital().get_is_colonial() && (state.defines.alice_disallow_factories_in_colonies != 0.f || !type.get_can_be_built_in_colonies())) {
+					continue;
+				}
+
 				auto& inputs = type.get_inputs();
 				bool lacking_input = false;
 				bool lacking_output = m.get_demand_satisfaction(type.get_output()) < 0.98f;
@@ -1221,9 +1280,11 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 				auto& constr_cost = type.get_construction_costs();
 				auto lacking_constr = false;
 
+				// If there is absolute deficit of construction goods, don't build for now
+				// However, we're interested in this market signal only if there are any transactions happening
 				for(uint32_t i = 0; i < economy::commodity_set::set_size; ++i) {
 					if(constr_cost.commodity_type[i]) {
-						if(m.get_demand_satisfaction(constr_cost.commodity_type[i]) < 0.1f)
+						if(m.get_demand(constr_cost.commodity_type[i]) > 0.01f && m.get_demand_satisfaction(constr_cost.commodity_type[i]) < 0.1f)
 							lacking_constr = true;
 					} else {
 						break;
@@ -1233,7 +1294,7 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 				float cost = economy::factory_type_build_cost(state, n, m, type) + 0.1f;
 				float output = economy::factory_type_output_cost(state, n, m, type);
 				float input = economy::factory_type_input_cost(state, n, m, type) + 0.1f;
-				auto profit = (output - input) * (1.0f - rich_effect);
+				auto profit = (output - input - wage * type.get_base_workforce()) * (1.0f - rich_effect);
 				auto roi = profit / cost;
 
 				if((!lacking_input && !lacking_constr && (lacking_output || (profit / cost > 0.005f))) || profit / input > 1.00f)
@@ -1246,6 +1307,12 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 	if(desired_types.empty()) {
 		for(auto type : state.world.in_factory_type) {
 			if(n.get_active_building(type) || type.get_is_available_from_start()) {
+
+				// Check rules for factories in colonies
+				if(sid.get_capital().get_is_colonial() && (state.defines.alice_disallow_factories_in_colonies != 0.f || !type.get_can_be_built_in_colonies())) {
+					continue;
+				}
+
 				auto& inputs = type.get_inputs();
 				bool lacking_input = false;
 				bool lacking_output = m.get_demand_satisfaction(type.get_output()) < 0.98f;
@@ -1262,9 +1329,11 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 				auto& constr_cost = type.get_construction_costs();
 				auto lacking_constr = false;
 
+				// If there is absolute deficit of construction goods, don't build for now
+				// However, we're interested in this market signal only if there are any transactions happening
 				for(uint32_t i = 0; i < economy::commodity_set::set_size; ++i) {
 					if(constr_cost.commodity_type[i]) {
-						if(m.get_demand_satisfaction(constr_cost.commodity_type[i]) < 0.1f)
+						if(m.get_demand(constr_cost.commodity_type[i]) > 0.01f && m.get_demand_satisfaction(constr_cost.commodity_type[i]) < 0.1f)
 							lacking_constr = true;
 					} else {
 						break;
@@ -1274,7 +1343,7 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 				float cost = economy::factory_type_build_cost(state, n, m, type) + 0.1f;
 				float output = economy::factory_type_output_cost(state, n, m, type);
 				float input = economy::factory_type_input_cost(state, n, m, type) + 0.1f;
-				auto profit = (output - input) * (1.0f - rich_effect);
+				auto profit = (output - input - wage * type.get_base_workforce()) * (1.0f - rich_effect);
 				auto roi = profit / cost;
 
 				if(!lacking_input && !lacking_constr && profit / input > 0.3f && roi > 0.001f)
@@ -1284,30 +1353,39 @@ void get_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::mar
 	}
 }
 
-void get_state_craved_factory_types(sys::state& state, dcon::nation_id nid, dcon::market_id mid, std::vector<dcon::factory_type_id>& desired_types) {
+void get_state_craved_factory_types(sys::state& state, dcon::nation_id nid, dcon::market_id mid, dcon::province_id pid, std::vector<dcon::factory_type_id>& desired_types) {
 	assert(desired_types.empty());
 	auto n = dcon::fatten(state.world, nid);
 	auto m = dcon::fatten(state.world, mid);
+	auto sid = m.get_zone_from_local_market();
 	auto treasury = n.get_stockpiles(economy::money);
+	auto wage = state.world.province_get_labor_price(pid, economy::labor::basic_education) * 2.f;
+
 
 	if(desired_types.empty()) {
 		for(auto type : state.world.in_factory_type) {
 			if(n.get_active_building(type) || type.get_is_available_from_start()) {
+				// Check rules for factories in colonies
+				if(sid.get_capital().get_is_colonial() && (state.defines.alice_disallow_factories_in_colonies != 0.f || !type.get_can_be_built_in_colonies())) {
+					continue;
+				}
+
 				float cost = economy::factory_type_build_cost(state, n, m, type) + 0.1f;
 				float output = economy::factory_type_output_cost(state, n, m, type);
 				float input = economy::factory_type_input_cost(state, n, m, type) + 0.1f;
 
-				if((output - input) / input > 20.f)
+				if((output - input - wage * type.get_base_workforce()) / input > 20.f)
 					desired_types.push_back(type.id);
 			} // END if building unlocked
 		}
 	}
 }
 
-void get_state_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::market_id mid, std::vector<dcon::factory_type_id>& desired_types) {
+void get_state_desired_factory_types(sys::state& state, dcon::nation_id nid, dcon::market_id mid, dcon::province_id pid, std::vector<dcon::factory_type_id>& desired_types) {
 	assert(desired_types.empty());
 	auto n = dcon::fatten(state.world, nid);
 	auto m = dcon::fatten(state.world, mid);
+	auto wage = state.world.province_get_labor_price(pid, economy::labor::basic_education) * 2.f;
 
 	auto treasury = n.get_stockpiles(economy::money);
 
@@ -1315,6 +1393,11 @@ void get_state_desired_factory_types(sys::state& state, dcon::nation_id nid, dco
 	if(desired_types.empty()) {
 		for(auto type : state.world.in_factory_type) {
 			if(n.get_active_building(type) || type.get_is_available_from_start()) {
+				// Check rules for factories in colonies
+				auto sid = m.get_local_market().get_zone();
+				if(sid.get_capital().get_is_colonial() && (state.defines.alice_disallow_factories_in_colonies != 0.f || !type.get_can_be_built_in_colonies())) {
+					continue;
+				}
 				auto& inputs = type.get_inputs();
 				bool lacking_input = false;
 				bool lacking_output = m.get_demand_satisfaction(type.get_output()) < 0.98f;
@@ -1332,7 +1415,7 @@ void get_state_desired_factory_types(sys::state& state, dcon::nation_id nid, dco
 				float output = economy::factory_type_output_cost(state, n, m, type);
 				float input = economy::factory_type_input_cost(state, n, m, type) + 0.1f;
 
-				if((lacking_output || ((output - input) / cost < 365.f)))
+				if((lacking_output || ((output - input - wage * type.get_base_workforce()) / cost < 365.f)))
 					desired_types.push_back(type.id);
 			} // END if building unlocked
 		}
@@ -1342,6 +1425,12 @@ void get_state_desired_factory_types(sys::state& state, dcon::nation_id nid, dco
 	if(desired_types.empty()) {
 		for(auto type : state.world.in_factory_type) {
 			if(n.get_active_building(type) || type.get_is_available_from_start()) {
+				// Check rules for factories in colonies
+				auto sid = m.get_local_market().get_zone();
+				if(sid.get_capital().get_is_colonial() && (state.defines.alice_disallow_factories_in_colonies != 0.f || !type.get_can_be_built_in_colonies())) {
+					continue;
+				}
+
 				auto& inputs = type.get_inputs();
 				bool lacking_input = false;
 				bool lacking_output = m.get_demand_satisfaction(type.get_output()) < 0.98f;
@@ -1360,7 +1449,7 @@ void get_state_desired_factory_types(sys::state& state, dcon::nation_id nid, dco
 				float input = economy::factory_type_input_cost(state, n, m, type) + 0.1f;
 				auto profitabilitymark = std::max(0.01f, cost * 10.f / treasury);
 
-				if((lacking_output || ((output - input) / input > profitabilitymark)))
+				if((lacking_output || ((output - input - wage * type.get_base_workforce()) / input > profitabilitymark)))
 					desired_types.push_back(type.id);
 			} // END if building unlocked
 		}
@@ -1441,7 +1530,7 @@ int16_t calculate_desired_army_size(sys::state& state, dcon::nation_id nation) {
 	auto greatest_neighbour_tagname = text::produce_simple_string(state, identity.get_name());
 #endif
 
-	return int16_t(std::clamp(total * double(factor), 0.1 * fid.get_recruitable_regiments(), 1.0 * fid.get_recruitable_regiments()));
+	return int16_t(std::clamp(ceil(total * double(factor)), ceil(0.1 * fid.get_recruitable_regiments()), 1.0 * fid.get_recruitable_regiments()));
 }
 
 void update_ai_econ_construction(sys::state& state) {
@@ -1479,15 +1568,15 @@ void update_ai_econ_construction(sys::state& state) {
 
 		if((rules & issue_rule::expand_factory) != 0 || (rules & issue_rule::build_factory) != 0) {
 			// prepare a list of states
-			static std::vector<dcon::state_instance_id> ordered_states;
-			ordered_states.clear();
-			for(auto si : n.get_state_ownership()) {
-				if(si.get_state().get_capital().get_is_colonial() == false)
-					ordered_states.push_back(si.get_state().id);
+			static std::vector<dcon::province_id> ordered_provinces;
+			ordered_provinces.clear();
+			for(auto p : n.get_province_ownership()) {
+				if(p.get_province().get_state_membership().get_capital().get_is_colonial() == false || state.defines.alice_disallow_factories_in_colonies == 0.0f)
+					ordered_provinces.push_back(p.get_province());
 			}
-			std::sort(ordered_states.begin(), ordered_states.end(), [&](auto a, auto b) {
-				auto apop = state.world.state_instance_get_demographics(a, demographics::total);
-				auto bpop = state.world.state_instance_get_demographics(b, demographics::total);
+			std::sort(ordered_provinces.begin(), ordered_provinces.end(), [&](auto a, auto b) {
+				auto apop = state.world.province_get_demographics(a, demographics::total);
+				auto bpop = state.world.province_get_demographics(b, demographics::total);
 				if(apop != bpop)
 					return apop > bpop;
 				else
@@ -1502,25 +1591,24 @@ void update_ai_econ_construction(sys::state& state) {
 				if((rules & issue_rule::build_factory) == 0 && (rules & issue_rule::expand_factory) != 0) { // can't build -- by elimination, can upgrade
 
 				} else if((rules & issue_rule::build_factory) != 0) { // -- i.e. if building is possible
-					for(auto si : ordered_states) {
-
-						auto market = state.world.state_instance_get_market_from_local_market(si);
+					for(auto p : ordered_provinces) {
+						auto sid = state.world.province_get_state_membership(p);
+						auto market = state.world.state_instance_get_market_from_local_market(sid);
 
 						if(budget - additional_expenses <= 0.f)
 							break;
 
-						auto m = state.world.state_instance_get_market_from_local_market(si);
 						craved_types.clear();
-						get_state_craved_factory_types(state, n, m, craved_types);
+						get_state_craved_factory_types(state, n, market, p, craved_types);
 
 						// check -- either unemployed factory workers or no factory workers
-						auto pw_num = state.world.state_instance_get_demographics(si,
+						auto pw_num = state.world.province_get_demographics(p,
 								demographics::to_key(state, state.culture_definitions.primary_factory_worker));
-						pw_num += state.world.state_instance_get_demographics(si,
+						pw_num += state.world.province_get_demographics(p,
 								demographics::to_key(state, state.culture_definitions.secondary_factory_worker));
-						auto pw_employed = state.world.state_instance_get_demographics(si,
+						auto pw_employed = state.world.province_get_demographics(p,
 								demographics::to_employment_key(state, state.culture_definitions.primary_factory_worker));
-						pw_employed += state.world.state_instance_get_demographics(si,
+						pw_employed += state.world.province_get_demographics(p,
 								demographics::to_employment_key(state, state.culture_definitions.secondary_factory_worker));
 
 						if(pw_employed >= float(pw_num) * 2.5f && pw_num > 0.0f)
@@ -1529,12 +1617,12 @@ void update_ai_econ_construction(sys::state& state) {
 						auto type_selection = craved_types[rng::get_random(state, uint32_t(n.id.index() + int32_t(budget))) % craved_types.size()];
 						assert(type_selection);
 
-						if(state.world.factory_type_get_is_coastal(type_selection) && !province::state_is_coastal(state, si))
+						if(state.world.factory_type_get_is_coastal(type_selection) && !state.world.province_get_port_to(p))
 							continue;
 
 						bool already_in_progress = [&]() {
-							for(auto p : state.world.state_instance_get_state_building_construction(si)) {
-								if(p.get_type() == type_selection)
+							for(auto fc : state.world.province_get_factory_construction(p)) {
+								if(fc.get_type() == type_selection)
 									return true;
 							}
 							return false;
@@ -1547,16 +1635,14 @@ void update_ai_econ_construction(sys::state& state) {
 							bool present_in_location = false;
 							bool under_cap = false;
 
-							province::for_each_province_in_state_instance(state, si, [&](dcon::province_id p) {
-								for(auto fac : state.world.province_get_factory_location(p)) {
-									auto type = fac.get_factory().get_building_type();
-									if(type_selection == type) {
-										under_cap = economy::factory_total_employment_score(state, fac.get_factory()) < 0.9f;
-										present_in_location = true;
-										return;
-									}
+							for(auto fac : state.world.province_get_factory_location(p)) {
+								auto type = fac.get_factory().get_building_type();
+								if(type_selection == type) {
+									under_cap = economy::factory_total_employment_score(state, fac.get_factory()) < 0.9f;
+									present_in_location = true;
+									return;
 								}
-							});
+							}
 							if(under_cap) {
 								continue; // factory doesn't need to get larger
 							}
@@ -1580,8 +1666,8 @@ void update_ai_econ_construction(sys::state& state) {
 								continue;
 
 							if(present_in_location) {
-								if((rules & issue_rule::expand_factory) != 0) {
-									auto new_up = fatten(state.world, state.world.force_create_state_building_construction(si, n));
+								if((rules & issue_rule::expand_factory) != 0 && economy::do_resource_potentials_allow_upgrade(state, n, p, type_selection)) {
+									auto new_up = fatten(state.world, state.world.force_create_factory_construction(p, n));
 									new_up.set_is_pop_project(false);
 									new_up.set_is_upgrade(true);
 									new_up.set_type(type_selection);
@@ -1592,9 +1678,9 @@ void update_ai_econ_construction(sys::state& state) {
 							}
 
 							// else -- try to build -- must have room
-							int32_t num_factories = economy::state_factory_count(state, si, n);
-							if(num_factories < int32_t(state.defines.factories_per_state)) {
-								auto new_up = fatten(state.world, state.world.force_create_state_building_construction(si, n));
+							auto num_factories = economy::province_factory_count(state, p);
+							if(num_factories < int32_t(state.defines.factories_per_state) && economy::do_resource_potentials_allow_construction(state, n, p, type_selection)) {
+								auto new_up = fatten(state.world, state.world.force_create_factory_construction(p, n));
 								new_up.set_is_pop_project(false);
 								new_up.set_is_upgrade(false);
 								new_up.set_type(type_selection);
@@ -1609,60 +1695,58 @@ void update_ai_econ_construction(sys::state& state) {
 
 			// try to upgrade factories first:
 			if((rules & issue_rule::expand_factory) != 0) { // can't build -- by elimination, can upgrade
-				for(auto si : ordered_states) {
+				for(auto pid : ordered_provinces) {
 
-					auto market = state.world.state_instance_get_market_from_local_market(si);
+					auto sid = state.world.province_get_state_membership(pid);
+					auto market = state.world.state_instance_get_market_from_local_market(sid);
 
 					if(budget - additional_expenses <= 0.f)
 						break;
 
-					province::for_each_province_in_state_instance(state, si, [&](dcon::province_id p) {
-						for(auto fac : state.world.province_get_factory_location(p)) {
-							auto type = fac.get_factory().get_building_type();
+					for(auto fac : state.world.province_get_factory_location(pid)) {
+						auto type = fac.get_factory().get_building_type();
 
 
-							auto unprofitable = fac.get_factory().get_unprofitable();
-							auto factory_level = fac.get_factory().get_level();
+						auto unprofitable = fac.get_factory().get_unprofitable();
 
-							if(!unprofitable && factory_level < uint8_t(255) && economy::factory_total_employment_score(state, fac.get_factory()) >= 0.9f) {
-								// test if factory is already upgrading
-								auto ug_in_progress = false;
-								for(auto c : state.world.state_instance_get_state_building_construction(si)) {
-									if(c.get_type() == type) {
-										ug_in_progress = true;
-										break;
-									}
-								}
-
-								auto expected_item_cost = 0.f;
-								auto& costs = state.world.factory_type_get_construction_costs(type);
-								auto& time = state.world.factory_type_get_construction_time(type);
-								for(uint32_t i = 0; i < costs.set_size; ++i) {
-									if(costs.commodity_type[i]) {
-										expected_item_cost +=
-											costs.commodity_amounts[i]
-											* economy::price(state, market, costs.commodity_type[i])
-											/ float(time)
-											* days_prepaid;
-									} else {
-										break;
-									}
-								}
-
-								if(budget - additional_expenses - expected_item_cost <= 0.f)
-									continue;
-
-								if(!ug_in_progress) {
-									auto new_up = fatten(state.world, state.world.force_create_state_building_construction(si, n));
-									new_up.set_is_pop_project(false);
-									new_up.set_is_upgrade(true);
-									new_up.set_type(type);
-
-									additional_expenses += expected_item_cost;
+						if(!unprofitable && economy::factory_total_employment_score(state, fac.get_factory()) >= 0.9f) {
+							// test if factory is already upgrading
+							auto ug_in_progress = false;
+							for(auto c : state.world.province_get_factory_construction(pid)) {
+								if(c.get_type() == type) {
+									ug_in_progress = true;
+									break;
 								}
 							}
+
+							auto expected_item_cost = 0.f;
+							auto& costs = state.world.factory_type_get_construction_costs(type);
+							auto& time = state.world.factory_type_get_construction_time(type);
+							for(uint32_t i = 0; i < costs.set_size; ++i) {
+								if(costs.commodity_type[i]) {
+									expected_item_cost +=
+										costs.commodity_amounts[i]
+										* economy::price(state, market, costs.commodity_type[i])
+										/ float(time)
+										* days_prepaid;
+								} else {
+									break;
+								}
+							}
+
+							if(budget - additional_expenses - expected_item_cost <= 0.f)
+								continue;
+
+							if(!ug_in_progress && economy::do_resource_potentials_allow_upgrade(state, n, pid, type)) {
+								auto new_up = fatten(state.world, state.world.force_create_factory_construction(pid, n));
+								new_up.set_is_pop_project(false);
+								new_up.set_is_upgrade(true);
+								new_up.set_type(type);
+
+								additional_expenses += expected_item_cost;
+							}
 						}
-					});
+					}
 				}
 			}
 
@@ -1674,25 +1758,25 @@ void update_ai_econ_construction(sys::state& state) {
 				if((rules & issue_rule::build_factory) == 0 && (rules & issue_rule::expand_factory) != 0) { // can't build -- by elimination, can upgrade
 					
 				} else if((rules & issue_rule::build_factory) != 0) { // -- i.e. if building is possible
-					for(auto si : ordered_states) {
+					for(auto pid : ordered_provinces) {
 
-						auto market = state.world.state_instance_get_market_from_local_market(si);
+						auto sid = state.world.province_get_state_membership(pid);
+						auto market = state.world.state_instance_get_market_from_local_market(sid);
 
 						if(budget - additional_expenses <= 0.f)
 							break;
 
-						auto m = state.world.state_instance_get_market_from_local_market(si);
 						desired_types.clear();
-						get_state_desired_factory_types(state, n, m, desired_types);
+						get_state_desired_factory_types(state, n, market, pid, desired_types);
 
 						// check -- either unemployed factory workers or no factory workers
-						auto pw_num = state.world.state_instance_get_demographics(si,
+						auto pw_num = state.world.province_get_demographics(pid,
 								demographics::to_key(state, state.culture_definitions.primary_factory_worker));
-						pw_num += state.world.state_instance_get_demographics(si,
+						pw_num += state.world.province_get_demographics(pid,
 								demographics::to_key(state, state.culture_definitions.secondary_factory_worker));
-						auto pw_employed = state.world.state_instance_get_demographics(si,
+						auto pw_employed = state.world.province_get_demographics(pid,
 								demographics::to_employment_key(state, state.culture_definitions.primary_factory_worker));
-						pw_employed += state.world.state_instance_get_demographics(si,
+						pw_employed += state.world.province_get_demographics(pid,
 								demographics::to_employment_key(state, state.culture_definitions.secondary_factory_worker));
 
 						if(pw_employed >= float(pw_num) * 2.5f && pw_num > 0.0f)
@@ -1701,11 +1785,11 @@ void update_ai_econ_construction(sys::state& state) {
 						auto type_selection = desired_types[rng::get_random(state, uint32_t(n.id.index() + int32_t(budget))) % desired_types.size()];
 						assert(type_selection);
 
-						if(state.world.factory_type_get_is_coastal(type_selection) && !province::state_is_coastal(state, si))
+						if(state.world.factory_type_get_is_coastal(type_selection) && !state.world.province_get_port_to(pid))
 							continue;
 
 						bool already_in_progress = [&]() {
-							for(auto p : state.world.state_instance_get_state_building_construction(si)) {
+							for(auto p : state.world.province_get_factory_construction(pid)) {
 								if(p.get_type() == type_selection)
 									return true;
 							}
@@ -1719,16 +1803,14 @@ void update_ai_econ_construction(sys::state& state) {
 						bool present_in_location = false;
 						bool under_cap = false;
 
-						province::for_each_province_in_state_instance(state, si, [&](dcon::province_id p) {
-							for(auto fac : state.world.province_get_factory_location(p)) {
-								auto type = fac.get_factory().get_building_type();
-								if(type_selection == type) {
-									under_cap = economy::factory_total_employment_score(state, fac.get_factory()) < 0.9f;
-									present_in_location = true;
-									return;
-								}
+						for(auto fac : state.world.province_get_factory_location(pid)) {
+							auto type = fac.get_factory().get_building_type();
+							if(type_selection == type) {
+								under_cap = economy::factory_total_employment_score(state, fac.get_factory()) < 0.9f;
+								present_in_location = true;
+								return;
 							}
-						});
+						}
 						if(under_cap) {
 							continue; // factory doesn't need to get larger
 						}
@@ -1752,8 +1834,8 @@ void update_ai_econ_construction(sys::state& state) {
 							continue;
 
 						if(present_in_location) {
-							if((rules & issue_rule::expand_factory) != 0) {
-								auto new_up = fatten(state.world, state.world.force_create_state_building_construction(si, n));
+							if((rules & issue_rule::expand_factory) != 0 && economy::do_resource_potentials_allow_upgrade(state, n, pid, type_selection)) {
+								auto new_up = fatten(state.world, state.world.force_create_factory_construction(pid, n));
 								new_up.set_is_pop_project(false);
 								new_up.set_is_upgrade(true);
 								new_up.set_type(type_selection);
@@ -1764,9 +1846,9 @@ void update_ai_econ_construction(sys::state& state) {
 						}
 
 						// else -- try to build -- must have room
-						int32_t num_factories = economy::state_factory_count(state, si, n);
-						if(num_factories < int32_t(state.defines.factories_per_state)) {
-							auto new_up = fatten(state.world, state.world.force_create_state_building_construction(si, n));
+						int32_t num_factories = economy::province_factory_count(state, pid);
+						if(num_factories < int32_t(state.defines.factories_per_state) && economy::do_resource_potentials_allow_construction(state, n, pid, type_selection)) {
+							auto new_up = fatten(state.world, state.world.force_create_factory_construction(pid, n));
 							new_up.set_is_pop_project(false);
 							new_up.set_is_upgrade(false);
 							new_up.set_type(type_selection);
@@ -1779,9 +1861,6 @@ void update_ai_econ_construction(sys::state& state) {
 				} // END if((rules & issue_rule::build_factory) == 0)
 			} // END if(!desired_types.empty()) {
 		} // END  if((rules & issue_rule::expand_factory) != 0 || (rules & issue_rule::build_factory) != 0)
-
-		if(0.9f * n.get_recruitable_regiments() > n.get_active_regiments())
-			continue;
 
 		static std::vector<dcon::province_id> project_provs;
 		project_provs.clear();
@@ -1921,9 +2000,6 @@ void update_ai_econ_construction(sys::state& state) {
 				}
 			}
 		}
-
-		if(0.95f * n.get_recruitable_regiments() > n.get_active_regiments())
-			continue;
 
 		// try forts
 		if(budget - additional_expenses > 0.f) {
@@ -2948,31 +3024,73 @@ void sort_possible_justification_cbs(std::vector<possible_cb>& result, sys::stat
 			return state.world.nation_get_ai_rival(n) == a.target;
 		}
 
+		auto value_a = 0.f;
+		auto value_b = 0.f;
+		float risk_a = estimate_defensive_strength(state, a.target);
+		float risk_b = estimate_defensive_strength(state, b.target);
+
 		auto a_annexes = (state.world.cb_type_get_type_bits(a.cb) & military::cb_flag::po_annex) != 0;
 		auto b_annexes = (state.world.cb_type_get_type_bits(b.cb) & military::cb_flag::po_annex) != 0;
-		if(a_annexes != b_annexes)
-			return a_annexes;
+
+		if(a_annexes) {
+			value_a = state.world.nation_get_demographics(a.target, demographics::total);
+		}
+		if(b_annexes) {
+			value_b = state.world.nation_get_demographics(b.target, demographics::total);
+		}
 
 		auto a_land = (state.world.cb_type_get_type_bits(a.cb) & military::cb_flag::po_demand_state) != 0;
 		auto b_land = (state.world.cb_type_get_type_bits(b.cb) & military::cb_flag::po_demand_state) != 0;
 
-		if(a_land < b_land)
-			return a_land;
+		if(a_land) {
+			for(auto so : state.world.nation_get_state_ownership(a.target)) {
+				if(so.get_state().get_definition() == a.state_def) {
+					value_a = state.world.state_instance_get_demographics(so.get_state(), demographics::total);
+				}
+			}
+		}
+		if(b_land) {
+			for(auto so : state.world.nation_get_state_ownership(b.target)) {
+				if(so.get_state().get_definition() == b.state_def) {
+					value_b = state.world.state_instance_get_demographics(so.get_state(), demographics::total);
+				}
+			}
+		}
 
-		auto rel_a = state.world.get_diplomatic_relation_by_diplomatic_pair(n, a.target);
-		auto rel_b = state.world.get_diplomatic_relation_by_diplomatic_pair(n, b.target);
-		if(state.world.diplomatic_relation_get_value(rel_a) != state.world.diplomatic_relation_get_value(rel_b))
-			return state.world.diplomatic_relation_get_value(rel_a) < state.world.diplomatic_relation_get_value(rel_b);
+		risk_a *= military::cb_infamy(state, a.cb, a.target, a.state_def);
+		risk_b *= military::cb_infamy(state, b.cb, b.target, b.state_def);
 
-		if(a.cb != b.cb)
-			return a.cb.index() < b.cb.index();
-		if(a.target != b.target)
-			return a.target.index() < b.target.index();
-		if(a.secondary_nation != b.secondary_nation)
-			return a.secondary_nation.index() < b.secondary_nation.index();
-		if(a.associated_tag != b.associated_tag)
-			return a.associated_tag.index() < b.associated_tag.index();
-		return a.state_def.index() < b.state_def.index();
+		// Distance evaluation
+		//If it neighbors one of our spheres and we can pathfind to each other's capitals, we don't need naval supremacy to reach this nation
+		for(auto adj : state.world.nation_get_nation_adjacency(a.target)) {
+			auto other = adj.get_connected_nations(0) != n ? adj.get_connected_nations(0) : adj.get_connected_nations(1);
+			auto neighbor = other;
+			if(neighbor.get_in_sphere_of() == n) {
+				auto path = province::make_safe_land_path(state, state.world.nation_get_capital(n), state.world.nation_get_capital(neighbor), n);
+				if(path.empty()) {
+					continue;
+				}
+				value_a *= 1.5f;
+			}
+		}
+		if(state.world.get_nation_adjacency_by_nation_adjacency_pair(n, a.target) || naval_supremacy(state, n, a.target))
+			value_a *= 1.5;
+
+		for(auto adj : state.world.nation_get_nation_adjacency(b.target)) {
+			auto other = adj.get_connected_nations(0) != n ? adj.get_connected_nations(0) : adj.get_connected_nations(1);
+			auto neighbor = other;
+			if(neighbor.get_in_sphere_of() == n) {
+				auto path = province::make_safe_land_path(state, state.world.nation_get_capital(n), state.world.nation_get_capital(neighbor), n);
+				if(path.empty()) {
+					continue;
+				}
+				value_b *= 1.5f;
+			}
+		}
+		if(state.world.get_nation_adjacency_by_nation_adjacency_pair(n, b.target) || naval_supremacy(state, n, b.target))
+			value_b *= 1.5;
+
+		return value_a * risk_b > value_b * risk_a;
 	});
 }
 
@@ -3066,9 +3184,13 @@ void update_cb_fabrication(sys::state& state) {
 			if(n.get_is_at_war())
 				continue;
 			// Uncivilized nations are more aggressive to westernize faster
-			float infamy_limit = state.world.nation_get_is_civilized(n) ? state.defines.badboy_limit / 2.f : state.defines.badboy_limit;
+			float infamy_limit = state.world.nation_get_is_civilized(n) ? state.defines.badboy_limit / 1.5f : state.defines.badboy_limit;
+			if(state.world.nation_get_is_great_power(n)) {
+				infamy_limit *= 1.1f;
+			}
 			if(n.get_infamy() > infamy_limit)
 				continue;
+
 			if(n.get_constructing_cb_type())
 				continue;
 			auto ol = n.get_overlord_as_subject().get_ruler().id;
@@ -3587,15 +3709,23 @@ void make_peace_offers(sys::state& state) {
 }
 
 bool will_accept_peace_offer_value(sys::state& state,
-	dcon::nation_id n, dcon::nation_id from,
-	dcon::nation_id prime_attacker, dcon::nation_id prime_defender,
-	float primary_warscore, float scoreagainst_me,
-	bool offer_from_attacker, bool concession,
-	int32_t overall_po_value, int32_t my_po_target,
-	int32_t target_personal_po_value, int32_t potential_peace_score_against,
-	int32_t my_side_against_target, int32_t my_side_peace_cost,
-	int32_t war_duration, bool contains_sq) {
-	bool is_attacking = !offer_from_attacker;
+dcon::nation_id n, // target of the peacedeal (primary or secondary participant),
+dcon::nation_id from, // who sends the deal (primary or secondary participant)
+dcon::nation_id prime_attacker, // primary attacker of the war
+dcon::nation_id prime_defender, // primary defender of the war
+float primary_warscore, // Warscore of the war calculated with military::primary_warscore(state, w)
+float scoreagainst_me, // Directed warscore towards peacedeal target calculated with military::directed_warscore(state, w, state.local_player_nation, target)
+bool offer_from_attacker, // military::is_attacker(state, w, state.local_player_nation)
+bool concession, // If is_concession = true then it is "offer_peace", else it is "demand_peace" offer.
+int32_t overall_po_value, // Cost of the peacedeal (sum of warscore costs of added wargoals)
+int32_t my_po_target, // Warscore cost of wargoals target has in the war (stakes)
+int32_t target_personal_po_value, // Warscore cost target has to concede
+int32_t potential_peace_score_against, // Warscore costs of all WGs against target
+int32_t my_side_against_target, // Warscore costs of all WGs against peacedeal initiator
+int32_t my_side_peace_cost, // Warscore costs of all WGs side of the target has in the war
+int32_t war_duration, // Duration of the war in days
+bool contains_sq // does the peace deal contain status quo
+) {
 
 	auto overall_score = primary_warscore;
 	if(concession && overall_score <= -50.0f) {
@@ -3608,8 +3738,10 @@ bool will_accept_peace_offer_value(sys::state& state,
 	if(overall_po_value < -100)
 		return false;
 
+	// Warscore cost of WGs added against the target that are not enforced with the peace deal
 	auto personal_score_saved = target_personal_po_value - potential_peace_score_against;
 
+	// Peace deal ending the war
 	if((prime_attacker == n || prime_defender == n) && (prime_attacker == from || prime_defender == from)) {
 		if(overall_score <= -50 && overall_score <= overall_po_value * 2)
 			return true;
@@ -3627,8 +3759,9 @@ bool will_accept_peace_offer_value(sys::state& state,
 			if((overall_score - willingness_factor) <= overall_po_value && (overall_score / 2 - overall_po_value - willingness_factor) < 0)
 				return true;
 		}
-
-	} else if((prime_attacker == n || prime_defender == n) && concession) {
+	}
+	// Concession of secondary to primary
+	else if((prime_attacker == n || prime_defender == n) && concession) {
 		if(scoreagainst_me > 50)
 			return true;
 
@@ -3639,12 +3772,17 @@ bool will_accept_peace_offer_value(sys::state& state,
 			if(my_side_against_target <= overall_po_value)
 				return true;
 		}
-
-	} else {
+	}
+	// Peace deal to secondary participants
+	else {
+		// Don't accept status quo
 		if(contains_sq)
 			return false;
 
 		if(scoreagainst_me > 50 && scoreagainst_me > -overall_po_value * 2)
+			return true;
+
+		if(scoreagainst_me >= 100 and overall_po_value <= 100)
 			return true;
 
 		if(overall_score < 0.0f) { // we are losing
@@ -3781,30 +3919,6 @@ bool will_accept_peace_offer(sys::state& state, dcon::nation_id n, dcon::nation_
 	return false;
 }
 
-bool naval_supremacy(sys::state& state, dcon::nation_id n, dcon::nation_id target) {
-	auto self_sup = state.world.nation_get_used_naval_supply_points(n);
-
-	auto real_target = state.world.overlord_get_ruler(state.world.nation_get_overlord_as_subject(target));
-	if(!real_target)
-		real_target = target;
-
-	if(self_sup <= state.world.nation_get_used_naval_supply_points(real_target))
-		return false;
-
-	if(self_sup <= state.world.nation_get_in_sphere_of(real_target).get_used_naval_supply_points())
-		return false;
-
-	for(auto a : state.world.nation_get_diplomatic_relation(real_target)) {
-		if(!a.get_are_allied())
-			continue;
-		auto other = a.get_related_nations(0) != real_target ? a.get_related_nations(0) : a.get_related_nations(1);
-		if(self_sup <= other.get_used_naval_supply_points())
-			return false;
-	}
-
-	return true;
-}
-
 void make_war_decs(sys::state& state) {
 	auto targets = ve::vectorizable_buffer<dcon::nation_id, dcon::nation_id>(state.world.nation_size());
 	concurrency::parallel_for(uint32_t(0), state.world.nation_size(), [&](uint32_t i) {
@@ -3842,7 +3956,7 @@ void make_war_decs(sys::state& state) {
 				for(auto adj : state.world.nation_get_nation_adjacency(target)) {
 					auto other = adj.get_connected_nations(0) != n ? adj.get_connected_nations(0) : adj.get_connected_nations(1);
 					auto neighbor = other;
-					if(neighbor.get_in_sphere_of() == n){
+					if(neighbor.get_in_sphere_of() == n) {
 						auto path = province::make_safe_land_path(state, state.world.nation_get_capital(n), state.world.nation_get_capital(neighbor), n);
 						if(path.empty()) {
 							continue;
@@ -4009,7 +4123,7 @@ void update_budget(sys::state& state) {
 		auto rules = n.get_combined_issue_rules();
 		if(n.get_is_civilized() && (rules & issue_rule::build_factory) == 0) {
 			float investment_budget = investments_budget_ratio * base_income;
-			float max_investment_budget = 1.f + economy::estimate_domestic_investment(state, n);
+			float max_investment_budget = 1.f + economy::estimate_max_domestic_investment(state, n);
 			float investment_ratio = 100.f * math::sqrt(investment_budget / max_investment_budget);
 			investment_ratio = std::clamp(investment_ratio, 0.f, 100.f);
 			n.set_domestic_investment_spending(int8_t(investment_ratio));
@@ -4140,42 +4254,48 @@ bool unit_on_ai_control(sys::state& state, dcon::army_id a) {
 		: true;
 }*/
 
+bool will_upgrade_ships(sys::state& state, dcon::nation_id n) {
+	auto fid = dcon::fatten(state.world, n);
+
+	auto total = 0;
+	auto unfull = 0;
+
+	for(auto v : state.world.nation_get_navy_control(n)) {
+		if(!v.get_navy().get_battle_from_navy_battle_participation()) {
+			for(auto shp : v.get_navy().get_navy_membership()) {
+				total++;
+				if(shp.get_ship().get_strength() < 1.f)
+					unfull++;
+
+			}
+		}
+	}
+
+	return unfull <= total * 0.1f;
+}
+
 void update_ships(sys::state& state) {
 	static std::vector<dcon::ship_id> to_delete;
 	to_delete.clear();
+
 	for(auto n : state.world.in_nation) {
 		if(n.get_is_player_controlled())
 			continue;
+		// Landlocked nation shouldn't keep fleet
 		if(n.get_is_at_war() == false && nations::is_landlocked(state, n)) {
 			for(auto v : n.get_navy_control()) {
 				if(!v.get_navy().get_battle_from_navy_battle_participation()) {
 					for(auto shp : v.get_navy().get_navy_membership()) {
 						to_delete.push_back(shp.get_ship().id);
+						state.world.delete_ship(shp.get_ship());
 					}
 				}
 			}
 		} else if(n.get_is_at_war() == false) {
-			dcon::unit_type_id best_transport;
-			dcon::unit_type_id best_light;
-			dcon::unit_type_id best_big;
-			for(uint32_t i = 2; i < state.military_definitions.unit_base_definitions.size(); ++i) {
-				dcon::unit_type_id j{ dcon::unit_type_id::value_base_t(i) };
-				if(!n.get_active_unit(j) && !state.military_definitions.unit_base_definitions[j].active)
-					continue;
-				if(state.military_definitions.unit_base_definitions[j].type == military::unit_type::transport) {
-					if(!best_transport || state.military_definitions.unit_base_definitions[best_transport].defence_or_hull < state.military_definitions.unit_base_definitions[j].defence_or_hull) {
-						best_transport = j;
-					}
-				} else if(state.military_definitions.unit_base_definitions[j].type == military::unit_type::light_ship) {
-					if(!best_light || state.military_definitions.unit_base_definitions[best_light].defence_or_hull < state.military_definitions.unit_base_definitions[j].defence_or_hull) {
-						best_light = j;
-					}
-				} else if(state.military_definitions.unit_base_definitions[j].type == military::unit_type::big_ship) {
-					if(!best_big || state.military_definitions.unit_base_definitions[best_big].defence_or_hull < state.military_definitions.unit_base_definitions[j].defence_or_hull) {
-						best_big = j;
-					}
-				}
-			}
+			dcon::unit_type_id best_transport = military::get_best_transport(state, n);
+			dcon::unit_type_id best_light = military::get_best_light_ship(state, n);
+			dcon::unit_type_id best_big = military::get_best_big_ship(state, n);
+			
 			for(auto v : n.get_navy_control()) {
 				if(!v.get_navy().get_battle_from_navy_battle_participation()) {
 					auto trange = v.get_navy().get_army_transport();
@@ -4184,21 +4304,29 @@ void update_ships(sys::state& state) {
 					for(auto shp : v.get_navy().get_navy_membership()) {
 						auto type = shp.get_ship().get_type();
 
+						// Upgrade ships, don't delete them
 						if(state.military_definitions.unit_base_definitions[type].type == military::unit_type::transport && !transporting) {
-							if(best_transport && type != best_transport)
-								to_delete.push_back(shp.get_ship().id);
+							if(best_transport && type != best_transport && will_upgrade_ships(state, n)) {
+								shp.get_ship().set_type(best_transport);
+								shp.get_ship().set_strength(0.01f);
+							}
 						} else if(state.military_definitions.unit_base_definitions[type].type == military::unit_type::light_ship) {
-							if(best_light && type != best_light)
-								to_delete.push_back(shp.get_ship().id);
+							if(best_light && type != best_light && will_upgrade_ships(state, n)) {
+								shp.get_ship().set_type(best_light);
+								shp.get_ship().set_strength(0.01f);
+							}
 						} else if(state.military_definitions.unit_base_definitions[type].type == military::unit_type::big_ship) {
-							if(best_big && type != best_big)
-								to_delete.push_back(shp.get_ship().id);
+							if(best_big && type != best_big && will_upgrade_ships(state, n)) {
+								shp.get_ship().set_type(best_big);
+								shp.get_ship().set_strength(0.01f);
+							}
 						}
 					}
 				}
 			}
 		}
 	}
+
 	for(auto s : to_delete) {
 		state.world.delete_ship(s);
 	}
@@ -5256,8 +5384,8 @@ float estimate_army_defensive_strength(sys::state& state, dcon::army_id a) {
 		auto n = state.world.army_get_controller_from_army_control(a);
 		if(!n)
 			n = state.world.national_identity_get_nation_from_identity_holder(state.national_definitions.rebel_id);
-		auto back = state.world.leader_get_background(gen);
-		auto pers = state.world.leader_get_personality(gen);
+		auto back = military::get_leader_background_wrapper(state, gen);
+		auto pers = military::get_leader_personality_wrapper(state, gen);
 		float morale = state.world.nation_get_modifier_values(n, sys::national_mod_offsets::org_regain)
 			+ state.world.leader_trait_get_morale(back)
 			+ state.world.leader_trait_get_morale(pers) + 1.0f;
@@ -5290,8 +5418,8 @@ float estimate_army_offensive_strength(sys::state& state, dcon::army_id a) {
 		auto n = state.world.army_get_controller_from_army_control(a);
 		if(!n)
 			n = state.world.national_identity_get_nation_from_identity_holder(state.national_definitions.rebel_id);
-		auto back = state.world.leader_get_background(gen);
-		auto pers = state.world.leader_get_personality(gen);
+		auto back = military::get_leader_background_wrapper(state, gen);
+		auto pers = military::get_leader_personality_wrapper(state, gen);
 		float morale = state.world.nation_get_modifier_values(n, sys::national_mod_offsets::org_regain)
 			+ state.world.leader_trait_get_morale(back)
 			+ state.world.leader_trait_get_morale(pers) + 1.0f;
@@ -5824,7 +5952,7 @@ void move_gathered_attackers(sys::state& state) {
 	}
 }
 
-bool will_upgrade_units(sys::state& state, dcon::nation_id n) {
+bool will_upgrade_regiments(sys::state& state, dcon::nation_id n) {
 	auto fid = dcon::fatten(state.world, n);
 
 	auto total = fid.get_active_regiments();
@@ -5835,7 +5963,7 @@ bool will_upgrade_units(sys::state& state, dcon::nation_id n) {
 			if(r.get_regiment().get_strength() < 0.8f) {
 				unfull++;
 
-				if(unfull > total * 0.1) {
+				if(unfull > total * 0.1f) {
 					return false;
 				}
 			}
@@ -5874,7 +6002,7 @@ void update_land_constructions(sys::state& state) {
 		int32_t num_frontline = 0;
 		int32_t num_support = 0;
 
-		// Nation-wide best unit types
+		// Nation-wide best unit types. Function takes into account whether nation N can build them (there will be no severe shortages).
 		auto inf_type = military::get_best_infantry(state, n);
 		auto art_type = military::get_best_artillery(state, n);
 		military::unit_definition art_def;
@@ -5887,16 +6015,20 @@ void update_land_constructions(sys::state& state) {
 			for(auto r : ar.get_army().get_army_membership()) {
 				auto type = r.get_regiment().get_type();
 				auto etype = state.military_definitions.unit_base_definitions[type].type;
-				if(etype == military::unit_type::support || etype == military::unit_type::special) {
-					++num_support;
-				} else {
-					++num_frontline;
+
+				// Don't count severely undermanned regiments in own strength evaluation
+				if(r.get_regiment().get_strength() >= 0.1f) {
+					if(etype == military::unit_type::support || etype == military::unit_type::special) {
+						++num_support;
+					} else {
+						++num_frontline;
+					}
 				}
 
 				/* AI units upgrade
 				* AI upgrades units only if less than 10% of the army is currently under 80% strength (requiring supplies for reinforcement)
 				*/
-				if(will_upgrade_units(state, n)) {
+				if(will_upgrade_regiments(state, n)) {
 					auto primary_culture = r.get_regiment().get_pop_from_regiment_source().get_culture() == n.get_primary_culture();
 
 					// AI can upgrade into primary-culture-specific units such as guards
