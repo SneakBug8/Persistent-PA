@@ -1234,7 +1234,10 @@ int server_process_commands(sys::state& state, network::client_data& client) {
 			break;
 		}
 #ifndef NDEBUG
-		state.console_log("host:recv:client_cmd | from:" + std::to_string(client.playing_as.index()) + " type:" + readableCommandTypes[uint32_t(client.recv_buffer.type)]);
+		auto validsource = client.recv_buffer.source == client.playing_as;
+		auto validcommand = command::can_perform_command(state, client.recv_buffer);
+		state.console_log("host:recv:client_cmd | from:" + std::to_string(client.playing_as.index()) + " type:" + readableCommandTypes[uint32_t(client.recv_buffer.type)] +
+		"|validsource: " + std::to_string(validsource) + "|validcommand: " + std::to_string(validcommand));
 #endif
 			});
 
@@ -1383,9 +1386,12 @@ void send_to_client(sys::state& state, command::payload& c) {
 	if(c.type == command::command_type::notify_player_joins) {
 		c.data.notify_join.player_password = sys::player_password_raw{}; // Never send password to clients
 	}
+	// These commands are broadcasted to everybody no matter if they were source of target
+	auto istruebroadcast = c.type == command::command_type::notify_player_picks_nation;
+
 	/* Propagate to all the clients */
 	for(auto& client : state.network_state.clients) {
-		if(client.is_active() && (c.source == client.playing_as || c.source == state.local_player_nation)) {
+		if(client.is_active() && (c.source == client.playing_as || c.source == state.local_player_nation || istruebroadcast)) {
 			socket_add_to_send_queue(client.send_buffer, &c, sizeof(c));
 #ifndef NDEBUG
 			state.console_log("host:send:cmd | to: " + std::to_string(client.playing_as.index()) +
@@ -1565,6 +1571,9 @@ void send_and_receive_commands(sys::state& state) {
 				state.network_state.save_stream = false; // go back to normal command loop stuff
 
 				state.ui_freeze.store(false, std::memory_order_release);
+
+				// Notify server that we're still here
+				network_inactivity_ping(state, state.local_player_nation, state.current_date);
 			});
 			if(r > 0) { // error
 				ui::popup_error_window(state, "Network Error", "Network client save stream receive error: " + get_last_error_msg());
