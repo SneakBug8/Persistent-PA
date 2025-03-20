@@ -1573,7 +1573,7 @@ void send_and_receive_commands(sys::state& state) {
 				state.ui_freeze.store(false, std::memory_order_release);
 
 				// Notify server that we're still here
-				network_inactivity_ping(state, state.local_player_nation, state.current_date);
+				command::network_inactivity_ping(state, state.local_player_nation, state.current_date);
 			});
 			if(r > 0) { // error
 				ui::popup_error_window(state, "Network Error", "Network client save stream receive error: " + get_last_error_msg());
@@ -1653,6 +1653,8 @@ void advance_tick(sys::state& state) {
 		}
 		network::write_network_save(state);
 		broadcast_savegame(state);
+
+		command::advance_tick(state, state.local_player_nation);
 
 		state.ui_freeze.store(false, std::memory_order_release);
 	} else {

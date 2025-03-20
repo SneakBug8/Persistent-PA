@@ -4596,7 +4596,7 @@ void state::game_loop() {
 						std::lock_guard l{ ugly_ui_game_interaction_hack };
 						single_game_tick();
 					}
-					last_update = entry_time;
+					last_update = std::chrono::steady_clock::now();
 				} else {
 					std::this_thread::sleep_for(std::chrono::milliseconds(1));
 				}

@@ -5449,7 +5449,10 @@ void advance_tick(sys::state& state, dcon::nation_id source) {
 }
 
 void execute_advance_tick(sys::state& state, dcon::nation_id source, sys::checksum_key& k, int32_t speed, sys::date new_date) {
-	if(state.network_mode == sys::network_mode_type::client) {
+	state.actual_game_speed = speed;
+	state.last_update = std::chrono::steady_clock::now();
+
+	/*if(state.network_mode == sys::network_mode_type::client) {
 		if(!state.network_state.out_of_sync) {
 			if(state.current_date.to_ymd(state.start_date).day == 1 || state.cheat_data.daily_oos_check) {
 #ifndef NDEBUG
@@ -5478,7 +5481,7 @@ void execute_advance_tick(sys::state& state, dcon::nation_id source, sys::checks
 	// Notify server that we're still here
 	if(state.current_date.value % 7 == 0 && state.network_mode == sys::network_mode_type::client) {
 		network_inactivity_ping(state, state.local_player_nation, state.current_date);
-	}
+	}*/
 }
 
 void notify_save_loaded(sys::state& state, dcon::nation_id source) {

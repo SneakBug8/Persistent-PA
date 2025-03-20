@@ -4579,6 +4579,15 @@ guiTypes = {
 		position = { x= 148 y = 3 }
 		quadTextureSprite = "GFX_take_province"	
 	}
+	instantTextBoxType = { 
+			name = "alice_timer_text"
+			position = { x = 450 y = 86 }
+			extends = "topbar"
+			font = "vic_22"
+			maxWidth = 160
+			maxHeight = 32	
+			format = left
+	}
 	guiButtonType = {
 			name = "button_ban"
 			extends = "ingame_multiplayer_entry"
