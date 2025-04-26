@@ -1001,20 +1001,9 @@ class topbar_timer_text : public simple_text_element_base {
 public:
 	void on_update(sys::state& state) noexcept override {
 		auto speed = state.actual_game_speed.load(std::memory_order::acquire);
-		static int32_t game_speed[] = {
-		0,		// speed 0
-		2000,	// speed 1 -- 2 seconds
-		750,		// speed 2 -- 0.75 seconds
-		250, 	// speed 3 -- 0.25 seconds
-		125,		// speed 4 -- 0.125 seconds
-		};
-		game_speed[1] = int32_t(state.defines.alice_speed_1);
-		game_speed[2] = int32_t(state.defines.alice_speed_2);
-		game_speed[3] = int32_t(state.defines.alice_speed_3);
-		game_speed[4] = int32_t(state.defines.alice_speed_4);
-
+		
 		auto ms_count = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - state.last_update).count();
-		auto required_count = game_speed[speed];
+		auto required_count = state.game_speed[speed];
 
 		set_text(state, std::to_string((required_count - ms_count) / 1000));
 	}

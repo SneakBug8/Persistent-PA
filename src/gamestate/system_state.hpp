@@ -596,6 +596,8 @@ struct alignas(64) state {
 
 	host_settings_s host_settings;
 
+	std::array<int32_t, 5> game_speed;
+
 	//
 	// current program / ui state
 	//
