@@ -1799,6 +1799,11 @@ state.host_settings.y = data[x]
 		HS_LOAD("alice_persistent_server_unpause", alice_persistent_server_unpause);
 		HS_LOAD("alice_turn_based", alice_turn_based);
 		HS_LOAD("alice_days_per_turn", alice_days_per_turn);
+		HS_LOAD("alice_speed_1", alice_speed_1);
+		HS_LOAD("alice_speed_2", alice_speed_2);
+		HS_LOAD("alice_speed_3", alice_speed_3);
+		HS_LOAD("alice_speed_4", alice_speed_4);
+
 	}
 }
 
@@ -1821,6 +1826,11 @@ data[x] = state.host_settings.y
 		HS_SAVE("alice_persistent_server_unpause", alice_persistent_server_unpause);
 		HS_SAVE("alice_turn_based", alice_turn_based);
 		HS_SAVE("alice_days_per_turn", alice_days_per_turn);
+		HS_SAVE("alice_speed_1", alice_speed_1);
+		HS_SAVE("alice_speed_2", alice_speed_2);
+		HS_SAVE("alice_speed_3", alice_speed_3);
+		HS_SAVE("alice_speed_4", alice_speed_4);
+
 
 		std::string res = data.dump();
 

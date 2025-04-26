@@ -403,6 +403,10 @@ struct host_settings_s {
 	float alice_lagging_behind_days_to_drop = 90.f;
 	float alice_turn_based = 1.f;
 	float alice_days_per_turn = 7.f;
+	float alice_speed_1 = 60000.f;
+	float alice_speed_2 = 30000.f;
+	float alice_speed_3 = 10000.f;
+	float alice_speed_4 = 5000.f;
 };
 
 struct global_scenario_data_s { // this struct holds miscellaneous global properties of the scenario
