@@ -41,4 +41,5 @@ tax_information explain_tax_income(sys::state& state, dcon::nation_id n);
 tax_information explain_tax_income_local(sys::state& state, dcon::nation_id n, dcon::province_id sid);
 
 bool has_active_embargo(sys::state& state, dcon::nation_id from, dcon::nation_id to);
+float explain_administration_employment(sys::state& state, dcon::province_id p);
 }

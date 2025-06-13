@@ -378,6 +378,16 @@ has_not_recently_lost_war;has not recently lost a war
 mobilized;mobilized
 mobilization_size;mobilization size
 admin_spending;administration spending
+local_admin_spending;Estimated cost: ?Y$value$?W
+local_admin_employment;Employees: ?Y$value$?W
+local_admin_wage;Wage: ?Y$value$?W
+tax_collection_rate;Tax collection rate: ?Y$value$?W
+poor_potential;Potential poor taxes: ?Y$value$?W
+mid_potential;Potential middle taxes: ?Y$value$?W
+rich_potential;Potential rich taxes: ?Y$value$?W
+poor_taxes;Actual poor taxes: ?Y$value$?W
+mid_taxes;Actual middle taxes: ?Y$value$?W
+rich_taxes;Actual rich taxes: ?Y$value$?W
 greater_than_edu_spending;greater than education spending
 support_for_rp;support for ruling party
 colonial;colonial
@@ -1403,10 +1413,15 @@ transportaion_loss;Goods lost in transportation: ?Y$val$
 payment_per_unit;Buyer paid per unit: ?Y$val$
 payment_received_per_unit;Seller got per unit: ?Y$val$
 merchants_received_per_unit;Seller merchants profit per unit: ?Y$val$
+trade_route_volume_profit_score;Profit score: ?Y$val$?W (Profit ?Y$x$?W divided by import price ?Y$y$?W)
+trade_route_volume_base_change;Base expected change: ?Y$val$?W (Current volume ?Y$x$?W times profit score)
+trade_route_volume_expansion_multiplier;Expansion multiplier: ?Y$val$?W (Depends on actual access to commodity in exporting market)
+trade_route_volume_decay;Decay: ?Y$val$?W (Prevents trade volume from running too far away)
+trade_route_volume_final_change;Expected change: ?Y$val$
 investment_pool;Investment pool: ?Y$x$?W
 investment_pool_income_1;Population reinvestment: ?G$x$?W
-investment_pool_income_2;Transfer from subject $country$: ?G$x$W
-investment_pool_income_3;Government domestic investment: ?G$x$W
+investment_pool_income_2;Transfer from subject $country$: ?G$x$?W
+investment_pool_income_3;Government domestic investment: ?G$x$?W
 investment_pool_spending_1;"Incentives" spending: ?R$x$?W
 investment_pool_spending_2;Construction spending: ?R$x$?W
 investment_pool_spending_3;Transfer to subjects: ?R$x$?W
@@ -1535,6 +1550,8 @@ pop_migration_attraction_3;The migration target factor: $x$
 pop_migration_attraction_wage_ratio;And the wage difference multipler: $x$
 pop_migration_attraction_bureaucracy;Bureaucracy base attraction: $x$
 alice_toggle_administration;Establish or abolish local administration. Administrations outside your control will not work. Consult administrative map mode to check existing administrations.
+administration_tile;Local administration
+market_tile;Local market
 alice_unit_target;===> $x$
 alice_lobby_resync;Resync lobby
 alice_lobby_resync_players_loading;Cannot resync when players are loading
