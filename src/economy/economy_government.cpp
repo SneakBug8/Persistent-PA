@@ -279,7 +279,8 @@ bool has_active_embargo(sys::state& state, dcon::nation_id from, dcon::nation_id
 	return state.world.unilateral_relationship_get_embargo(rel_1);
 }
 
-// Calculate employment of local administrations in the province
+// Calculate employment of local administrations in the province.
+// When using, check for capital administration separately
 float explain_administration_employment(sys::state& state, dcon::province_id p) {
 	auto n = state.world.province_get_nation_from_province_ownership(p);
 
