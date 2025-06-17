@@ -79,7 +79,7 @@ list(APPEND ALICE_INCREMENTAL_SOURCES_LIST
 	"src/military/military.cpp"
 	"src/nations/nations.cpp"
 	"src/network/SHA512.cpp"
-	"src/network/network.cpp"
+	"src/network/turn_based.cpp"
 	"src/parsing/float_from_chars.cpp"
 	"src/parsing/parsers.cpp"
 	"src/platform_specific.cpp"
