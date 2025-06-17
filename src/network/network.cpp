@@ -742,17 +742,6 @@ static dcon::nation_id choose_nation_for_player(sys::state& state) {
 	return dcon::nation_id{ };
 }
 
-dcon::nation_id get_first_available_ai_nation(sys::state& state) {
-	for(auto nation : state.world.in_nation) {
-		if(nation && !nation.get_is_player_controlled()) {
-			return nation;
-		}
-	}
-
-	// if there are no nations available
-	return dcon::nation_id{ };
-}
-
 void place_players_after_reload(sys::state& state, std::vector<dcon::nation_id>& players, dcon::nation_id old_local_player_nation) {
 	for(auto playernation : players) {
 		if(state.world.nation_is_valid(playernation)) {
@@ -761,7 +750,7 @@ void place_players_after_reload(sys::state& state, std::vector<dcon::nation_id>&
 				state.local_player_nation = playernation;
 			}
 		} else {
-			auto new_nation = network::get_first_available_ai_nation(state);
+			auto new_nation = network::choose_nation_for_player(state);
 			if(new_nation) {
 				state.world.nation_set_is_player_controlled(new_nation, true);
 				if(playernation == old_local_player_nation) {
@@ -1586,6 +1575,7 @@ void send_and_receive_commands(sys::state& state) {
 #endif
 				}
 			}
+			state.network_state.save_slock.unlock();
 		}
 	} else if(state.network_mode == sys::network_mode_type::client) {
 		if(state.network_state.handshake) {
