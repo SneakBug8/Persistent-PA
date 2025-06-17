@@ -5355,7 +5355,6 @@ void execute_notify_player_joins(sys::state& state, dcon::nation_id source, sys:
 		if(!password.empty()) {
 			network::update_mp_player_password(state, p, password);
 		}
-		// update mp player with the joining players loading state
 		state.world.mp_player_set_fully_loaded(p, !needs_loading);
 		state.world.mp_player_set_is_oos(p, false);
 	}

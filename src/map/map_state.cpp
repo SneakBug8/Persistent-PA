@@ -236,7 +236,7 @@ void update_trade_flow_arrows(sys::state& state, display_data& map_data) {
 		auto total_out = 0.f;
 
 		state.world.market_for_each_trade_route(mid, [&](auto route) {
-			auto current_volume = state.world.trade_route_get_volume(route, cid);		
+			auto current_volume = state.world.trade_route_get_volume(route, cid);
 			auto origin =
 				current_volume > 0.f
 				? state.world.trade_route_get_connected_markets(route, 0)
@@ -266,7 +266,7 @@ void update_trade_flow_arrows(sys::state& state, display_data& map_data) {
 			}
 		});
 
-		
+
 
 		// if total in > total out
 		// we assume that commodity has a chance to be consumed
@@ -279,7 +279,7 @@ void update_trade_flow_arrows(sys::state& state, display_data& map_data) {
 			disappear_weight = total_in - total_out;
 		}
 
-		
+
 
 		auto sid = state.world.market_get_zone_from_local_market(mid);
 		auto port = province::state_get_coastal_capital(state, sid);
@@ -413,7 +413,7 @@ void update_trade_flow_arrows(sys::state& state, display_data& map_data) {
 		}
 
 		if(state.world.province_get_port_to(origin)) {
-			map_data.trade_node_position[base_index] = get_port_location(state, origin) ;
+			map_data.trade_node_position[base_index] = get_port_location(state, origin);
 		}
 	});
 
@@ -670,8 +670,7 @@ void update_unit_arrows(sys::state& state, display_data& map_data) {
 					map::make_army_direction(state, map_data.attack_unit_arrow_vertices, map_army, float(map_data.size_x), float(map_data.size_y));
 					map_data.attack_unit_arrow_counts.push_back(GLsizei(map_data.attack_unit_arrow_vertices.size() - old_size));
 				}
-			}
-			else if (state.local_player_nation == army_controller) {
+			} else if(state.local_player_nation == army_controller) {
 				auto old_size = map_data.unit_arrow_vertices.size();
 				map_data.unit_arrow_starts.push_back(GLint(old_size));
 				map::make_army_direction(state, map_data.unit_arrow_vertices, map_army, float(map_data.size_x), float(map_data.size_y));
@@ -713,7 +712,7 @@ void update_unit_arrows(sys::state& state, display_data& map_data) {
 					map::make_navy_direction(state, map_data.unit_arrow_vertices, map_navy, float(map_data.size_x), float(map_data.size_y));
 					map_data.unit_arrow_counts.push_back(GLsizei(map_data.unit_arrow_vertices.size() - old_size));
 				}
-			} else if (state.local_player_nation == navy_controller) {
+			} else if(state.local_player_nation == navy_controller) {
 				auto old_size = map_data.unit_arrow_vertices.size();
 				map_data.unit_arrow_starts.push_back(GLint(old_size));
 				map::make_navy_direction(state, map_data.unit_arrow_vertices, map_navy, float(map_data.size_x), float(map_data.size_y));
@@ -833,7 +832,7 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 			}
 		}*/
 
-	// generate graph of regions:
+		// generate graph of regions:
 	for(auto candidate : state.world.in_province) {
 		auto rid = candidate.get_connected_region_id();
 
@@ -1232,14 +1231,14 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 					is_good = true;
 			}
 
-			if (is_good) {
+			if(is_good) {
 				good_points.push_back(point);
 				sum_points += point;
 			}
 		}
 
 		points = good_points;
-		
+
 
 		//initial center:
 		glm::vec2 center = sum_points / (float)(points.size());
@@ -1263,7 +1262,7 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 		float left = 0.f;
 		float top = 0.f;
 		float bottom = 0.f;
-		for(auto point: points) {
+		for(auto point : points) {
 			//OutputDebugStringA((std::to_string(point.x) + ", " + std::to_string(point.y) + ", \n").c_str());
 			glm::vec2 current = point - center;
 			if((current.x > right) && (current.x * current.x < limit)) {
@@ -1325,7 +1324,7 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 		std::vector<std::array<float, 4>> in_x;
 		std::vector<std::array<float, 4>> in_y;
 
-		for (auto point : points) {
+		for(auto point : points) {
 			auto e = point;
 
 			if(e.x < basis.x) {
@@ -1342,7 +1341,7 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 			out_y.push_back(e.y);
 			out_x.push_back(e.x);
 			//w.push_back(10 * float(map_data.province_area[province::to_map_id(p2)]));
-					
+
 			in_x.push_back(std::array<float, 4>{ l_0 * 1.f, l_1* e.x, l_1* e.x* e.x, l_3* e.x* e.x* e.x});
 			in_y.push_back(std::array<float, 4>{ l_0 * 1.f, l_1* e.y, l_1* e.y* e.y, l_3* e.y* e.y* e.y});
 		}
@@ -1386,18 +1385,18 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 			// y = mo[0] + mo[1] * x + mo[2] * x * x + mo[3] * x * x * x
 			auto poly_fn = [&](float x) {
 				return mo[0] * l_0 + mo[1] * x * l_1 + mo[2] * x * x * l_2 + mo[3] * x * x * x * l_3;
-			};
+				};
 			auto dx_fn = [&](float x) {
 				return mo[1] * l_1 + 2.f * mo[2] * x * l_2 + 3.f * mo[3] * x * x * l_3;
-			};
+				};
 			auto error_grad = [&](float x, float y) {
-				float error_linear = poly_fn(x) - y;				
+				float error_linear = poly_fn(x) - y;
 				return glm::vec4(error_linear * error_linear * error_linear * error_linear * error_linear * mo);
-			};
+				};
 
 			auto regularisation_grad = [&]() {
 				return glm::vec4(0, 0, mo[2] / 4.f, mo[3] / 6.f);
-			};
+				};
 
 			float xstep = (1.f / float(name_extent * 2.f));
 			for(float x = 0.f; x <= 1.f; x += xstep) {
@@ -1412,7 +1411,7 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 					use_quadratic = true;
 					break;
 				}
-			}			
+			}
 
 			if(!use_quadratic)
 				text_data.emplace_back(std::move(prepared_name), mo, basis, ratio);
@@ -1441,10 +1440,10 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 			// y = mo[0] + mo[1] * x + mo[2] * x * x
 			auto poly_fn = [&](float x) {
 				return mo[0] * l_0 + mo[1] * x * l_1 + mo[2] * x * x * l_2;
-			};
+				};
 			auto dx_fn = [&](float x) {
 				return mo[1] * l_1 + 2.f * mo[2] * x * l_2;
-			};
+				};
 			float xstep = (1.f / float(name_extent * 2.f));
 			for(float x = 0.f; x <= 1.f; x += xstep) {
 				float y = poly_fn(x);
@@ -1486,7 +1485,7 @@ void update_text_lines(sys::state& state, display_data& map_data) {
 			// y = mo[0] + mo[1] * x
 			auto poly_fn = [&](float x) {
 				return mo[0] * l_0 + mo[1] * x * l_1;
-			};
+				};
 
 
 			// check if this is really better than taking the longest horizontal
@@ -1543,12 +1542,11 @@ void map_state::update(sys::state& state) {
 	if(last_update_time == std::chrono::time_point<std::chrono::steady_clock>{})
 		last_update_time = now;
 
-	if(!state.ui_freeze.load(std::memory_order_acquire)) {
-		if(state.selected_trade_good && state.update_trade_flow.load(std::memory_order::acquire)) {
-			update_trade_flow_arrows(state, map_data);
-			state.update_trade_flow.store(false, std::memory_order_release);
-		}
-		update_unit_arrows(state, map_data);
+	if(state.selected_trade_good && state.update_trade_flow.load(std::memory_order::acquire)) {
+		update_trade_flow_arrows(state, map_data);
+		state.update_trade_flow.store(false, std::memory_order_release);
+	}
+	update_unit_arrows(state, map_data);
 
 	// Update railroads, only if railroads are being built and we have 'em enabled
 	if(state.user_settings.railroads_enabled && state.sprawl_update_requested.load(std::memory_order::acquire)) {
@@ -1565,16 +1563,16 @@ void map_state::update(sys::state& state) {
 
 	if((left_arrow_key_down xor right_arrow_key_down) or (up_arrow_key_down xor down_arrow_key_down)) {
 		glm::vec2 arrow_key_velocity_vector{};
-		if (left_arrow_key_down) {
+		if(left_arrow_key_down) {
 			arrow_key_velocity_vector.x -= 1.f;
 		}
-		if (right_arrow_key_down) {
+		if(right_arrow_key_down) {
 			arrow_key_velocity_vector.x += 1.f;
 		}
-		if (up_arrow_key_down) {
+		if(up_arrow_key_down) {
 			arrow_key_velocity_vector.y -= 1.f;
 		}
-		if (down_arrow_key_down) {
+		if(down_arrow_key_down) {
 			arrow_key_velocity_vector.y += 1.f;
 		}
 		arrow_key_velocity_vector = glm::normalize(arrow_key_velocity_vector);
@@ -1599,7 +1597,7 @@ void map_state::update(sys::state& state) {
 		} else if(mouse_pos_percent.y > 0.98f) {
 			cursor_velocity_vector.y += 1.f;
 		}
-	
+
 		// check if the vector length is not zero before normalizing
 		if(glm::length(cursor_velocity_vector) != 0.0f) {
 			cursor_velocity_vector = glm::normalize(cursor_velocity_vector);
@@ -1701,7 +1699,7 @@ void map_state::update(sys::state& state) {
 }
 
 void map_state::set_province_color(std::vector<uint32_t> const& prov_color, map_mode::mode new_map_mode) {
-	if (new_map_mode != map_mode::mode::handled_from_outside)
+	if(new_map_mode != map_mode::mode::handled_from_outside)
 		active_map_mode = new_map_mode;
 	map_data.set_province_color(prov_color);
 }
@@ -1711,7 +1709,7 @@ void map_state::set_terrain_map_mode() {
 }
 
 void map_state::on_key_down(sys::virtual_key keycode, sys::key_modifiers mod) {
-	switch (keycode) {
+	switch(keycode) {
 	case sys::virtual_key::LEFT:
 		left_arrow_key_down = true;
 		break;
@@ -1800,15 +1798,14 @@ void map_state::on_mouse_move(int32_t x, int32_t y, int32_t screen_size_x, int32
 	}
 	glm::vec2 mouse_diff = glm::abs(last_unit_box_drag_pos - mouse_pos);
 	if((mouse_diff.x > std::ceil(screen_size_x * 0.0025f) || mouse_diff.y > std::ceil(screen_size_y * 0.0025f))
-		&& left_mouse_down)
-	{
+		&& left_mouse_down) {
 		auto pos1 = last_unit_box_drag_pos / screen_size;
 		auto pos2 = mouse_pos / screen_size;
 		auto pixel_size = glm::vec2(1) / screen_size;
 		map_data.set_drag_box(true, pos1, pos2, pixel_size);
 	} else {
 		map_data.set_drag_box(false, {}, {}, {});
-	}	
+	}
 }
 
 bool map_state::screen_to_map(glm::vec2 screen_pos, glm::vec2 screen_size, map_view view_mode, glm::vec2& map_pos) {
@@ -1836,7 +1833,7 @@ bool map_state::screen_to_map(glm::vec2 screen_pos, glm::vec2 screen_size, map_v
 			return true;
 		}
 		return false;
-	} else if (view_mode == map_view::globe_perspect) {
+	} else if(view_mode == map_view::globe_perspect) {
 		float aspect_ratio = screen_size.x / screen_size.y;
 		float pi = glm::pi<float>();
 
@@ -2003,155 +2000,155 @@ bool validate_screen_position(glm::vec2 screen_size, glm::vec2& screen_pos, glm:
 bool map_state::map_to_screen(sys::state& state, glm::vec2 map_pos, glm::vec2 screen_size, glm::vec2& screen_pos, glm::vec2 tolerance) {
 	switch(state.user_settings.map_is_globe) {
 	case sys::projection_mode::globe_ortho:
-		{
-			glm::vec3 cartesian_coords;
-			float section = 200;
-			float pi = glm::pi<float>();
-			float angle_x1 = 2 * pi * std::floor(map_pos.x * section) / section;
-			float angle_x2 = 2 * pi * std::floor(map_pos.x * section + 1) / section;
-			if(!std::isfinite(angle_x1)) {
-				assert(false);
-				angle_x1 = 0.0f;
-			}
-			if(!std::isfinite(angle_x2)) {
-				assert(false);
-				angle_x2 = 0.0f;
-			}
-			if(!std::isfinite(map_pos.x)) {
-				assert(false);
-				map_pos.x = 0.0f;
-			}
-			if(!std::isfinite(map_pos.y)) {
-				assert(false);
-				map_pos.y = 0.0f;
-			}
-			cartesian_coords.x = std::lerp(std::cos(angle_x1), std::cos(angle_x2), std::fmod(map_pos.x * section, 1.f));
-			cartesian_coords.y = std::lerp(std::sin(angle_x1), std::sin(angle_x2), std::fmod(map_pos.x * section, 1.f));
-
-			float angle_y = (1.f - map_pos.y) * pi;
-			cartesian_coords.x *= std::sin(angle_y);
-			cartesian_coords.y *= std::sin(angle_y);
-			cartesian_coords.z = std::cos(angle_y);
-			cartesian_coords = glm::mat3(globe_rotation) * cartesian_coords;
-			cartesian_coords /= glm::pi<float>();
-			cartesian_coords.x *= -1;
-			cartesian_coords.y *= -1;
-			if(cartesian_coords.y > 0) {
-				return false;
-			}
-			cartesian_coords += glm::vec3(0.5f);
-
-			screen_pos = glm::vec2(cartesian_coords.x, cartesian_coords.z);
-			screen_pos = (2.f * screen_pos - glm::vec2(1.f));
-			screen_pos *= zoom;
-			screen_pos.x *= screen_size.y / screen_size.x;
-			screen_pos = ((screen_pos + glm::vec2(1.f)) * 0.5f);
-			screen_pos *= screen_size;
-			return validate_screen_position(screen_size, screen_pos, tolerance);
+	{
+		glm::vec3 cartesian_coords;
+		float section = 200;
+		float pi = glm::pi<float>();
+		float angle_x1 = 2 * pi * std::floor(map_pos.x * section) / section;
+		float angle_x2 = 2 * pi * std::floor(map_pos.x * section + 1) / section;
+		if(!std::isfinite(angle_x1)) {
+			assert(false);
+			angle_x1 = 0.0f;
 		}
+		if(!std::isfinite(angle_x2)) {
+			assert(false);
+			angle_x2 = 0.0f;
+		}
+		if(!std::isfinite(map_pos.x)) {
+			assert(false);
+			map_pos.x = 0.0f;
+		}
+		if(!std::isfinite(map_pos.y)) {
+			assert(false);
+			map_pos.y = 0.0f;
+		}
+		cartesian_coords.x = std::lerp(std::cos(angle_x1), std::cos(angle_x2), std::fmod(map_pos.x * section, 1.f));
+		cartesian_coords.y = std::lerp(std::sin(angle_x1), std::sin(angle_x2), std::fmod(map_pos.x * section, 1.f));
+
+		float angle_y = (1.f - map_pos.y) * pi;
+		cartesian_coords.x *= std::sin(angle_y);
+		cartesian_coords.y *= std::sin(angle_y);
+		cartesian_coords.z = std::cos(angle_y);
+		cartesian_coords = glm::mat3(globe_rotation) * cartesian_coords;
+		cartesian_coords /= glm::pi<float>();
+		cartesian_coords.x *= -1;
+		cartesian_coords.y *= -1;
+		if(cartesian_coords.y > 0) {
+			return false;
+		}
+		cartesian_coords += glm::vec3(0.5f);
+
+		screen_pos = glm::vec2(cartesian_coords.x, cartesian_coords.z);
+		screen_pos = (2.f * screen_pos - glm::vec2(1.f));
+		screen_pos *= zoom;
+		screen_pos.x *= screen_size.y / screen_size.x;
+		screen_pos = ((screen_pos + glm::vec2(1.f)) * 0.5f);
+		screen_pos *= screen_size;
+		return validate_screen_position(screen_size, screen_pos, tolerance);
+	}
 	case sys::projection_mode::globe_perpect:
-		{
-			float aspect_ratio = screen_size.x / screen_size.y;
+	{
+		float aspect_ratio = screen_size.x / screen_size.y;
 
-			glm::vec3 cartesian_coords;
-			float section = 200;
-			float angle_x1 = 2.f * glm::pi<float>() * std::floor(map_pos.x * section) / section;
-			float angle_x2 = 2.f * glm::pi<float>() * std::floor(map_pos.x * section + 1) / section;
-			if(!std::isfinite(angle_x1)) {
-				assert(false);
-				angle_x1 = 0.0f;
-			}
-			if(!std::isfinite(angle_x2)) {
-				assert(false);
-				angle_x2 = 0.0f;
-			}
-			if(!std::isfinite(map_pos.x)) {
-				assert(false);
-				map_pos.x = 0.0f;
-			}
-			if(!std::isfinite(map_pos.y)) {
-				assert(false);
-				map_pos.y = 0.0f;
-			}
-			cartesian_coords.x = std::lerp(std::cos(angle_x1), std::cos(angle_x2), std::fmod(map_pos.x * section, 1.f));
-			cartesian_coords.y = std::lerp(std::sin(angle_x1), std::sin(angle_x2), std::fmod(map_pos.x * section, 1.f));
-
-			float angle_y = (map_pos.y) * glm::pi<float>();
-			cartesian_coords.x *= std::sin(angle_y);
-			cartesian_coords.y *= std::sin(angle_y);
-			cartesian_coords.z = std::cos(angle_y);
-
-			glm::vec3 temp_vector = cartesian_coords;
-
-			// Apply rotation
-			cartesian_coords.z *= -1;
-			cartesian_coords = glm::mat3(globe_rotation) * cartesian_coords;
-			cartesian_coords.z *= -1;
-
-			cartesian_coords /= glm::pi<float>(); // Will make the zoom be the same for the globe and flat map
-			cartesian_coords.x *= -1;
-			cartesian_coords.z *= -1;
-
-			float temp = cartesian_coords.z;
-			cartesian_coords.z = cartesian_coords.y;
-			cartesian_coords.y = temp;
-
-			// shift the globe away from camera
-			cartesian_coords.z -= 1.2f;
-			float near_plane = 0.1f;
-
-			// optimal far plane for culling out invisible part of a planet
-			constexpr float tangent_length_square = 1.2f * 1.2f - 1 / glm::pi<float>() / glm::pi<float>();
-			float far_plane = tangent_length_square / 1.2f;
-
-			float right = near_plane * tan(glm::pi<float>() / 6.f) / zoom;
-			float top = near_plane * tan(glm::pi<float>() / 6.f) / zoom;
-
-			cartesian_coords.x *= near_plane / right;
-			cartesian_coords.y *= near_plane / top;
-
-			// depth calculations just for reference
-			float w = -cartesian_coords.z;
-			cartesian_coords.z = -(far_plane + near_plane) / (far_plane - near_plane) * cartesian_coords.z - 2 * far_plane * near_plane / (far_plane - near_plane);
-
-			if(cartesian_coords.z > far_plane) {
-				return false;
-			}
-
-			screen_pos = glm::vec2(cartesian_coords.x, cartesian_coords.y) / w;
-			//screen_pos = (2.f * screen_pos - glm::vec2(1.f));
-			//screen_pos *= zoom;
-			screen_pos.x *= screen_size.y / screen_size.x;
-			screen_pos = ((screen_pos + glm::vec2(1.f)) * 0.5f);
-			screen_pos *= screen_size;
-			return validate_screen_position(screen_size, screen_pos, tolerance);
+		glm::vec3 cartesian_coords;
+		float section = 200;
+		float angle_x1 = 2.f * glm::pi<float>() * std::floor(map_pos.x * section) / section;
+		float angle_x2 = 2.f * glm::pi<float>() * std::floor(map_pos.x * section + 1) / section;
+		if(!std::isfinite(angle_x1)) {
+			assert(false);
+			angle_x1 = 0.0f;
 		}
+		if(!std::isfinite(angle_x2)) {
+			assert(false);
+			angle_x2 = 0.0f;
+		}
+		if(!std::isfinite(map_pos.x)) {
+			assert(false);
+			map_pos.x = 0.0f;
+		}
+		if(!std::isfinite(map_pos.y)) {
+			assert(false);
+			map_pos.y = 0.0f;
+		}
+		cartesian_coords.x = std::lerp(std::cos(angle_x1), std::cos(angle_x2), std::fmod(map_pos.x * section, 1.f));
+		cartesian_coords.y = std::lerp(std::sin(angle_x1), std::sin(angle_x2), std::fmod(map_pos.x * section, 1.f));
+
+		float angle_y = (map_pos.y) * glm::pi<float>();
+		cartesian_coords.x *= std::sin(angle_y);
+		cartesian_coords.y *= std::sin(angle_y);
+		cartesian_coords.z = std::cos(angle_y);
+
+		glm::vec3 temp_vector = cartesian_coords;
+
+		// Apply rotation
+		cartesian_coords.z *= -1;
+		cartesian_coords = glm::mat3(globe_rotation) * cartesian_coords;
+		cartesian_coords.z *= -1;
+
+		cartesian_coords /= glm::pi<float>(); // Will make the zoom be the same for the globe and flat map
+		cartesian_coords.x *= -1;
+		cartesian_coords.z *= -1;
+
+		float temp = cartesian_coords.z;
+		cartesian_coords.z = cartesian_coords.y;
+		cartesian_coords.y = temp;
+
+		// shift the globe away from camera
+		cartesian_coords.z -= 1.2f;
+		float near_plane = 0.1f;
+
+		// optimal far plane for culling out invisible part of a planet
+		constexpr float tangent_length_square = 1.2f * 1.2f - 1 / glm::pi<float>() / glm::pi<float>();
+		float far_plane = tangent_length_square / 1.2f;
+
+		float right = near_plane * tan(glm::pi<float>() / 6.f) / zoom;
+		float top = near_plane * tan(glm::pi<float>() / 6.f) / zoom;
+
+		cartesian_coords.x *= near_plane / right;
+		cartesian_coords.y *= near_plane / top;
+
+		// depth calculations just for reference
+		float w = -cartesian_coords.z;
+		cartesian_coords.z = -(far_plane + near_plane) / (far_plane - near_plane) * cartesian_coords.z - 2 * far_plane * near_plane / (far_plane - near_plane);
+
+		if(cartesian_coords.z > far_plane) {
+			return false;
+		}
+
+		screen_pos = glm::vec2(cartesian_coords.x, cartesian_coords.y) / w;
+		//screen_pos = (2.f * screen_pos - glm::vec2(1.f));
+		//screen_pos *= zoom;
+		screen_pos.x *= screen_size.y / screen_size.x;
+		screen_pos = ((screen_pos + glm::vec2(1.f)) * 0.5f);
+		screen_pos *= screen_size;
+		return validate_screen_position(screen_size, screen_pos, tolerance);
+	}
 	case sys::projection_mode::flat:
-		{
-			map_pos -= pos;
+	{
+		map_pos -= pos;
 
-			if(map_pos.x >= 0.5f)
-				map_pos.x -= 1.0f;
-			if(map_pos.x < -0.5f)
-				map_pos.x += 1.0f;
+		if(map_pos.x >= 0.5f)
+			map_pos.x -= 1.0f;
+		if(map_pos.x < -0.5f)
+			map_pos.x += 1.0f;
 
-			map_pos *= zoom;
+		map_pos *= zoom;
 
-			map_pos.x *= float(map_data.size_x) / float(map_data.size_y);
-			map_pos.x *= screen_size.y / screen_size.x;
-			map_pos *= screen_size;
-			map_pos += screen_size * 0.5f;
-			screen_pos = map_pos;
-			if(screen_pos.x >= float(std::numeric_limits<int16_t>::max() / 2))
-				return false;
-			if(screen_pos.x <= float(std::numeric_limits<int16_t>::min() / 2))
-				return false;
-			if(screen_pos.y >= float(std::numeric_limits<int16_t>::max() / 2))
-				return false;
-			if(screen_pos.y <= float(std::numeric_limits<int16_t>::min() / 2))
-				return false;
-			return validate_screen_position(screen_size, screen_pos, tolerance);
-		}
+		map_pos.x *= float(map_data.size_x) / float(map_data.size_y);
+		map_pos.x *= screen_size.y / screen_size.x;
+		map_pos *= screen_size;
+		map_pos += screen_size * 0.5f;
+		screen_pos = map_pos;
+		if(screen_pos.x >= float(std::numeric_limits<int16_t>::max() / 2))
+			return false;
+		if(screen_pos.x <= float(std::numeric_limits<int16_t>::min() / 2))
+			return false;
+		if(screen_pos.y >= float(std::numeric_limits<int16_t>::max() / 2))
+			return false;
+		if(screen_pos.y <= float(std::numeric_limits<int16_t>::min() / 2))
+			return false;
+		return validate_screen_position(screen_size, screen_pos, tolerance);
+	}
 	case sys::projection_mode::num_of_modes:
 		return false;
 	default:

@@ -665,7 +665,7 @@ static std::map<int, std::string> readableCommandTypes = {
 { 255,"console_command" },
 };
 
-dcon::mp_player_id create_mp_player(sys::state& state, sys::player_name& name, sys::player_password_raw& password) {
+dcon::mp_player_id create_mp_player(sys::state& state, sys::player_name& name, sys::player_password_raw& password, bool fully_loaded, bool is_oos) {
 	auto p = state.world.create_mp_player();
 	state.world.mp_player_set_nickname(p, name.data);
 
@@ -673,6 +673,8 @@ dcon::mp_player_id create_mp_player(sys::state& state, sys::player_name& name, s
 	auto hash = sys::player_password_hash{}.from_string_view(sha512.hash(password.to_string() + salt.to_string()));
 	state.world.mp_player_set_password_hash(p, hash.data);
 	state.world.mp_player_set_password_salt(p, salt.data);
+	state.world.mp_player_set_fully_loaded(p, fully_loaded);
+	state.world.mp_player_set_is_oos(p, is_oos);
 
 	return p;
 }
@@ -738,6 +740,48 @@ static dcon::nation_id choose_nation_for_player(sys::state& state) {
 			}
 		}
 	return dcon::nation_id{ };
+}
+
+dcon::nation_id get_first_available_ai_nation(sys::state& state) {
+	for(auto nation : state.world.in_nation) {
+		if(nation && !nation.get_is_player_controlled()) {
+			return nation;
+		}
+	}
+
+	// if there are no nations available
+	return dcon::nation_id{ };
+}
+
+void place_players_after_reload(sys::state& state, std::vector<dcon::nation_id>& players, dcon::nation_id old_local_player_nation) {
+	for(auto playernation : players) {
+		if(state.world.nation_is_valid(playernation)) {
+			state.world.nation_set_is_player_controlled(playernation, true);
+			if(playernation == old_local_player_nation) {
+				state.local_player_nation = playernation;
+			}
+		} else {
+			auto new_nation = network::get_first_available_ai_nation(state);
+			if(new_nation) {
+				state.world.nation_set_is_player_controlled(new_nation, true);
+				if(playernation == old_local_player_nation) {
+					state.local_player_nation = playernation;
+				}
+			} else {
+				// refactor this when co-op becomes possible
+				ui::popup_error_window(state, "Too many players", "There are not enough nations for the amount of players");
+			}
+		}
+	}
+}
+
+bool any_player_oos(sys::state& state) {
+	for(auto player : state.world.in_mp_player) {
+		if(player && player.get_is_oos()) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void client_send_handshake(sys::state& state) {
@@ -898,6 +942,29 @@ static uint8_t const* with_network_decompressed_section(uint8_t const* ptr_in, T
 	return ptr_in + sizeof(uint32_t) * 2 + section_length;
 }
 
+void notify_player_is_loading(sys::state& state, sys::player_name name, dcon::nation_id nation, bool execute_self) {
+	command::payload c;
+	memset(&c, 0, sizeof(c));
+	c.type = command::command_type::notify_player_is_loading;
+	c.source = nation;
+	c.data.notify_player_is_loading.name = name;
+
+	for(auto& cl : state.network_state.clients) {
+		if(!cl.is_active()) {
+			continue;
+		}
+		socket_add_to_send_queue(cl.send_buffer, &c, sizeof(c));
+	}
+	if(execute_self) {
+		command::execute_command(state, c);
+	}
+#ifndef NDEBUG
+	const auto now = std::chrono::system_clock::now();
+	state.console_log(std::format("{:%d-%m-%Y %H:%M:%OS}", now) + "host:broadcast:cmd | type:notify_player_is_loading nation:" + std::to_string(nation.index()));
+#endif
+	write_player_nations(state);
+}
+
 void notify_player_joins(sys::state& state, sys::player_name name, dcon::nation_id nation, sys::player_password_raw password) {
 	// Tell all clients about this client
 	command::payload c;
@@ -948,7 +1015,7 @@ void notify_player_joins_discovery(sys::state& state, network::client_data& clie
 	}
 }
 
-void send_savegame(sys::state& state, network::client_data& client, bool hotjoin = false) {
+void send_savegame(sys::state& state, client_data& client, bool hotjoin = false) {
 	std::vector<char> tmp = client.send_buffer;
 	client.send_buffer.clear();
 
@@ -959,7 +1026,7 @@ void send_savegame(sys::state& state, network::client_data& client, bool hotjoin
 		c.type = command::command_type::notify_save_loaded;
 		c.source = state.local_player_nation;
 		c.data.notify_save_loaded.target = client.playing_as;
-		network::broadcast_save_to_clients(state, c, state.network_state.current_save_buffer.get(), state.network_state.current_save_length, state.network_state.current_save_checksum);
+		broadcast_save_to_clients(state, c, state.network_state.current_save_buffer.get(), state.network_state.current_save_length, state.network_state.current_save_checksum);
 #ifndef NDEBUG
 
 		state.console_log("host:broadcast:cmd | (new->save_loaded) | checksum: " + sha512.hash(state.network_state.current_save_checksum.to_char())
@@ -1138,7 +1205,7 @@ void full_reset_after_oos(sys::state& state) {
 			memset(&c, 0, sizeof(command::payload));
 			c.type = command::command_type::notify_save_loaded;
 			c.source = state.local_player_nation;
-			network::broadcast_save_to_clients(state, c, state.network_state.current_save_buffer.get(), state.network_state.current_save_length, state.network_state.current_save_checksum);
+			broadcast_save_to_clients(state, c, state.network_state.current_save_buffer.get(), state.network_state.current_save_length, state.network_state.current_save_checksum);
 #ifndef NDEBUG
 			state.console_log("host:broadcast:cmd | (new->save_loaded)");
 #endif
@@ -1432,93 +1499,92 @@ static void accept_new_clients(sys::state& state) {
 }
 
 void send_and_receive_commands(sys::state& state) {
-	/* An issue that arose in multiplayer is that the UI was loading the savefile
+	if(state.network_state.finished)
+		return;
+
+	bool command_executed = false;
+	if(state.network_mode == sys::network_mode_type::host) {
+		/* An issue that arose in multiplayer is that the UI was loading the savefile
 	   directly, while the game state loop was running, this was fine with the
 	   assumption that commands weren't executed while the save was being loaded
 	   HOWEVER in multiplayer this is often the case, so we have to block all
 	   commands until the savefile is finished loading
 	   This way, we're able to effectively and safely queue commands until we
 	   can receive them AFTER loading the savefile. */
-	if(state.network_state.save_slock.load(std::memory_order::acquire) == true)
-		return;
+		if(state.network_state.save_slock.try_lock()) {
+			accept_new_clients(state); // accept new connections
+			receive_from_clients(state); // receive new commands
 
-	if(state.network_state.finished)
-		return;
+			// send the commands of the server to all the clients
+			auto* c = state.network_state.outgoing_commands.front();
+			while(c) {
+				if(!command::is_console_command(c->type)) {
+					// Generate checksum on the spot
+					if(c->type == command::command_type::advance_tick) {
+						if(state.current_date.to_ymd(state.start_date).day == 1 || state.cheat_data.daily_oos_check) {
+							c->data.advance_tick.checksum = state.get_save_checksum();
+						}
+					}
+					if(c->type != command::command_type::notify_pause_game)
+						command::execute_command(state, *c);
+					send_to_client(state, *c);
+					command_executed = true;
+				}
+				state.network_state.outgoing_commands.pop();
+				c = state.network_state.outgoing_commands.front();
+			}
 
-	bool command_executed = false;
-	if(state.network_mode == sys::network_mode_type::host) {
-		accept_new_clients(state); // accept new connections
-		receive_from_clients(state); // receive new commands
+			// Clear lost sockets
+			if(state.current_date.to_ymd(state.start_date).day == 1 || state.cheat_data.daily_oos_check) {
+				for(auto& client : state.network_state.clients) {
+					if(!client.is_active())
+						continue;
 
-		// send the commands of the server to all the clients
-		auto* c = state.network_state.outgoing_commands.front();
-		while(c) {
-			if(!command::is_console_command(c->type)) {
-				// Generate checksum on the spot
-				if(c->type == command::command_type::advance_tick) {
-					if(state.current_date.to_ymd(state.start_date).day == 1 || state.cheat_data.daily_oos_check) {
-						c->data.advance_tick.checksum = state.get_save_checksum();
+					// Drop lost clients
+					if(state.current_scene.game_in_progress && state.current_date.value > state.host_settings.alice_lagging_behind_days_to_drop && state.current_date.value - client.last_seen.value > state.host_settings.alice_lagging_behind_days_to_drop) {
+						disconnect_client(state, client, true);
+					}
+					// Slow down for the lagging ones
+					else if(state.current_scene.game_in_progress && state.current_date.value > state.host_settings.alice_lagging_behind_days_to_slow_down && state.current_date.value - client.last_seen.value > state.host_settings.alice_lagging_behind_days_to_slow_down) {
+						state.actual_game_speed = std::clamp(state.actual_game_speed - 1, 1, 4);
 					}
 				}
-				if (c->type != command::command_type::notify_pause_game)
-					command::execute_command(state, *c);
-				send_to_client(state, *c);
-				command_executed = true;
 			}
-			state.network_state.outgoing_commands.pop();
-			c = state.network_state.outgoing_commands.front();
-		}
-		
-		// Clear lost sockets
-		if(state.current_date.to_ymd(state.start_date).day == 1 || state.cheat_data.daily_oos_check) {
+
 			for(auto& client : state.network_state.clients) {
 				if(!client.is_active())
 					continue;
-
-				// Drop lost clients
-				if(state.current_scene.game_in_progress && state.current_date.value > state.host_settings.alice_lagging_behind_days_to_drop && state.current_date.value - client.last_seen.value > state.host_settings.alice_lagging_behind_days_to_drop) {
-					disconnect_client(state, client, true);
-				}
-				// Slow down for the lagging ones
-				else if (state.current_scene.game_in_progress && state.current_date.value > state.host_settings.alice_lagging_behind_days_to_slow_down && state.current_date.value - client.last_seen.value > state.host_settings.alice_lagging_behind_days_to_slow_down) {
-					state.actual_game_speed = std::clamp(state.actual_game_speed - 1, 1, 4);
-				}
-			}
-		}
-
-		for(auto& client : state.network_state.clients) {
-			if(!client.is_active())
-				continue;
-			if(client.early_send_buffer.size() > 0) {
-				size_t old_size = client.early_send_buffer.size();
-				int r = socket_send(client.socket_fd, client.early_send_buffer);
-				if(r > 0) { // error
+				if(client.early_send_buffer.size() > 0) {
+					size_t old_size = client.early_send_buffer.size();
+					int r = socket_send(client.socket_fd, client.early_send_buffer);
+					if(r > 0) { // error
 #if !defined(NDEBUG) && defined(_WIN32)
-					state.console_log("host:disconnect | in-send-EARLY err=" + std::to_string(int32_t(r)) + "::" + get_last_error_msg());
+						state.console_log("host:disconnect | in-send-EARLY err=" + std::to_string(int32_t(r)) + "::" + get_last_error_msg());
 #endif
-					disconnect_client(state, client, false);
-					continue;
-				}
-				client.total_sent_bytes += old_size - client.early_send_buffer.size();
+						disconnect_client(state, client, false);
+						continue;
+					}
+					client.total_sent_bytes += old_size - client.early_send_buffer.size();
 #ifndef NDEBUG
-				if(old_size != client.early_send_buffer.size())
-					state.console_log("host:send:stats | [EARLY] to:" + std::to_string(client.playing_as.index()) + "total:" + std::to_string(uint32_t(client.total_sent_bytes)) + " bytes");
+					if(old_size != client.early_send_buffer.size())
+						state.console_log("host:send:stats | [EARLY] to:" + std::to_string(client.playing_as.index()) + "total:" + std::to_string(uint32_t(client.total_sent_bytes)) + " bytes");
 #endif
-		} else if(client.send_buffer.size() > 0) {
-				size_t old_size = client.send_buffer.size();
-				int r = socket_send(client.socket_fd, client.send_buffer);
-				if(r > 0) { // error
+				} else if(client.send_buffer.size() > 0) {
+					size_t old_size = client.send_buffer.size();
+					int r = socket_send(client.socket_fd, client.send_buffer);
+					if(r > 0) { // error
 #if !defined(NDEBUG) && defined(_WIN32)
-					state.console_log("host:disconnect | in-send-INGAME err=" + std::to_string(int32_t(r)) + "::" + get_last_error_msg());
+						state.console_log("host:disconnect | in-send-INGAME err=" + std::to_string(int32_t(r)) + "::" + get_last_error_msg());
 #endif
-					disconnect_client(state, client, false);
-					continue;
-				}
-				client.total_sent_bytes += old_size - client.send_buffer.size();
+						disconnect_client(state, client, false);
+						continue;
+					}
+					client.total_sent_bytes += old_size - client.send_buffer.size();
 #ifndef NDEBUG
-				if(old_size != client.send_buffer.size())
-					state.console_log("host:send:stats | [SEND] to:" +std::to_string(client.playing_as.index()) + "total:" + std::to_string(uint32_t(client.total_sent_bytes)) + " bytes");
+					if(old_size != client.send_buffer.size())
+						state.console_log("host:send:stats | [SEND] to:" + std::to_string(client.playing_as.index()) + "total:" + std::to_string(uint32_t(client.total_sent_bytes)) + " bytes");
 #endif
+				}
 			}
 		}
 	} else if(state.network_mode == sys::network_mode_type::client) {
