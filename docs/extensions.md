@@ -98,7 +98,8 @@ Additionally, triggers such as technology triggers no longer suffer from having 
 ```
 - `diplo_points = ...` : Will add the number to the currently stored diplomatic points of the nation in scope. (Note: so you can use a negative number to subtract points. Diplomatic points can not be reduced to less than zero.)
 - `suppression_points = ...` : Will add the number to the currently stored suppression points of the nation in scope. (Note: so you can use a negative number to subtract points. Suppression points can not be reduced to less than zero.)
- 
+
+
 As for `build_xxx_in_capital`, the game doesn't allow custom defined buildings to be used in this mode as an effect.
 
 The syntax for `build_bank_in_capital` and it's university counterpart is the same:
@@ -521,8 +522,10 @@ Alice adds a handful of new defines:
 - `alice_allow_revoke_subject_states`: Allows overlord to take subjects' states raising their militancy and giving separatism. Default: 0.0
 - `alice_leadership_generation_divisor`: To allow for battles to generate leadership, passive leadership generation is divided by this.
 - `alice_auto_hire_generals`: set to 0.0 to disable the game hiring generals and admirals automatically.
-- `alice_disallow_factories_in_colonies`: if set to 0, allows to build factories that have `can_be_built_in_colonies = yes` flag in colonies
+- `alice_allow_factories_in_colonies`: if set to 1, allows to build factories that have `can_be_built_in_colonies = yes` flag in colonies
 - `alice_naval_base_to_colonial_distance_factor` (default 0.04): multiplier in the formula for colonial distance unlocked by 1 lvl of naval base.
+- `alice_always_available_cbs_zero_infamy` - if set to 0, then CBs with `always = yes` will have infamy cost calculated as per `badboy_factor`.
+- `alice_economy_market_stockpile_spoilage` controls spoilage in market stockpiles (default: 0.05 = 5%)
 
 **Crises and conferences:**
 - `alice_crisis_necessary_base_win_ratio = 2.5f`: Strength Ratio at which AI submits to demands after 80 temperature
@@ -538,6 +541,10 @@ These relate to the added ability for reserve regiments to reinforce while in ba
 - `alice_reg_deploy_from_reserve_org = 0.1f`: if a reserve regiments org is equal to or higher than this decimal, it can be deployed to the front, if alice_reg_deploy_from_reserve_str is also fufilled. Default 0.1
 - `alice_reg_deploy_from_reserve_str = 0.0f`: if a reserve regiments strength is greater than this decimal, it can be deployed to the front, if alice_reg_deploy_from_reserve_org is also fufilled. Default 0.0
 
+
+These relate to naval battles:
+`alice_naval_combat_enemy_stacking_target_select_bonus = 0.5f`: The target-picking bonus a ship gets if they are outnumbered in a battle. This is added to the base, which by default is 0.5. It makes outnumbered navies find a target faster
+`alice_naval_combat_stacking_damage_penalty = 0.5f`: The max damage reduction to org and str applied to a fleet which outnumbers the enemy by define:NAVAL_COMBAT_MAX_TARGETS or more. The penalty will scale up starting when a side is outnumbered, and will max out at the given value when outnumbered by NAVAL_COMBAT_MAX_TARGETS times.
 
 ### Support for reforms based on party issues
 
@@ -754,7 +761,7 @@ rgo_distribution_add = {
 
 Factory potentials (e.g. resource potentials) is a feature that allows modders to limit number of factories per province (state).
 
-To limit factory creation to provinces having potentials, factory definition must have `uses_potentials = yes`.
+To limit factory creation to states that have provinces with corresponding commodity potentials, commodity definition must have `uses_potentials = yes`.
 
 In province history files define limits as follows:
 ```
@@ -763,5 +770,13 @@ factory_limit = {
         trade_good = iron
         max_level = 16
 	}
+}
+```
+
+To change the limit during runtime use the effect. As of v1.2.3 decreasing factory limits has no implemented checks:
+```
+change_factory_limit = {
+    trade_good = rubber
+    value = 15
 }
 ```

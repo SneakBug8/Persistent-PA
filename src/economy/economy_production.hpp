@@ -11,13 +11,13 @@
 namespace economy {
 
 inline constexpr float secondary_employment_output_bonus = 3.f;
-inline constexpr float unqualified_throughput_multiplier = 0.70f;
+inline constexpr float unqualified_throughput_multiplier = 0.2f;
 inline constexpr float artisans_per_employment_unit = 10'000.f;
-inline constexpr float construction_units_to_maintenance_units = 0.01f;
+inline constexpr float construction_units_to_maintenance_units = 0.0001f;
 inline constexpr float expansion_trigger = 0.8f;
 
-inline constexpr float rgo_profit_to_wage_bound = 0.1f;
-inline constexpr float factory_profit_to_wage_bound = 0.1f;
+inline constexpr float rgo_profit_to_wage_bound = 0.8f;
+inline constexpr float factory_profit_to_wage_bound = 2.f;
 
 struct ve_inputs_data {
 	ve::fp_vector min_available = 0.f;
@@ -89,7 +89,7 @@ float factory_type_input_cost(
 	dcon::market_id m,
 	dcon::factory_type_id factory_type
 );
-float factory_type_build_cost(sys::state& state, dcon::nation_id n, dcon::market_id m, dcon::factory_type_id factory_type);
+float factory_type_build_cost(sys::state& state, dcon::nation_id n, dcon::province_id p, dcon::factory_type_id factory_type, bool is_pop_project);
 
 // SHORTAGES, SURPLUS
 
@@ -119,14 +119,6 @@ struct rgo_workers_breakdown {
 };
 
 rgo_workers_breakdown rgo_relevant_population(sys::state& state, dcon::province_id p, dcon::nation_id n);
-float rgo_expected_worker_norm_profit(
-	sys::state& state,
-	dcon::province_id p,
-	dcon::market_id m,
-	dcon::nation_id n,
-	dcon::commodity_id c
-);
-
 
 float rgo_income(sys::state& state, dcon::province_id id);
 float rgo_income(sys::state& state, dcon::commodity_id c, dcon::province_id id);
@@ -145,6 +137,11 @@ float rgo_max_employment(sys::state& state, dcon::province_id p);
 
 float rgo_employment(sys::state& state, dcon::commodity_id c, dcon::province_id p);
 float rgo_employment(sys::state& state, dcon::province_id p);
+
+float rgo_wage(sys::state& state, dcon::commodity_id c, dcon::province_id p);
+float rgo_efficiency_spendings(sys::state& state, dcon::commodity_id c, dcon::province_id p);
+
+commodity_set rgo_calculate_actual_efficiency_inputs(sys::state& state, dcon::nation_id n, dcon::market_id m, dcon::province_id p, dcon::commodity_id c, float mobilization_impact);
 
 // ARTISANS:
 

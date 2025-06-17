@@ -1,3 +1,4 @@
+PROVINCEVIEW_GOODSINCOME;Sold ?Y$x$?W ?Y$GOODS$?W for ?Y$VALUE$?W yesterday
 support_for_blank;support for $text$
 uh_support_for_blank;upper house support for $text$
 up_to;up to 
@@ -310,6 +311,12 @@ a_railroad;a railroad
 a_fort;a fort
 a_naval_base;a naval base
 a_factory;a factory
+build_factory;Build factory
+upgrade_factory;Upgrade factory
+build_province_building;Build province building
+resource_potential;Resource potential
+available_potential;Local resources allow ?Y$val$?W levels of buildings producing $what$
+factory_level;Factory level ?Y$val$
 empty;unowned
 blockaded;blockaded
 national_modifier;national modifier
@@ -374,6 +381,25 @@ has_not_recently_lost_war;has not recently lost a war
 mobilized;mobilized
 mobilization_size;mobilization size
 admin_spending;administration spending
+employment_type_no_education;Employment type: ?YNo education?W
+employment_type_basic_education;Employment type: ?YBasic education?W
+employment_type_high_education_and_accepted;Employment type: ?YHigh Education and Accepted?W
+employment_type_high_education;Employment type: ?YHigh Education?W
+local_admin;Local Administration
+capital_admin;Capital Administration
+local_admin_spending;Estimated cost: ?Y$value$?W
+local_admin_employment;Administration Employees: ?Y$value$?W
+target_employment;Target employment: ?Y$value$?W
+employment_satisfaction;Employment satisfaction: ?Y$value$?W
+wage;Wage: ?Y$value$?W
+local_admin_efficiency;Local administrations are ?Y$value$?W less efficient than the capital one.
+tax_collection_rate;Tax collection rate: ?Y$value$?W
+poor_potential;Potential poor taxes: ?Y$value$?W
+mid_potential;Potential middle taxes: ?Y$value$?W
+rich_potential;Potential rich taxes: ?Y$value$?W
+poor_taxes;Actual poor taxes: ?Y$value$?W
+mid_taxes;Actual middle taxes: ?Y$value$?W
+rich_taxes;Actual rich taxes: ?Y$value$?W
 greater_than_edu_spending;greater than education spending
 support_for_rp;support for ruling party
 colonial;colonial
@@ -519,15 +545,18 @@ factory_upgrade_condition_8;The ruling party allows upgrading factories
 factory_upgrade_condition_9;The factory is not already being upgraded
 factory_upgrade_condition_10;The factory is not at max level
 factory_build_condition_11;State has available resource potentials
+resource_potential;Resource potential
+available_potential;Local resources allow ?Y$val$?W levels of buildings producing $what$
 factory_upgrade_condition_11;State has available resource potentials
 resource_potential;Resource potential
 available_potential;Local resources allow ?Y$val$?W levels of buildings producing $what$
 factory_delete_header;Delete factory
 factory_delete_not_allowed;The ruling party does not allow us to delete factories
 factory_level;Factory level ?Y$val$
-factory_stats_1;This factory is currently operating at $val$ capacity
-factory_stats_2;This factory is targeting $val$ capacity
-factory_stats_3;It produced $val$ units of $x$ in the previous day
+factory_employment;Factory employees: ?Y$val$
+factory_stats_1;Current production scale: ?Y$val$?W
+factory_stats_2;Target production scale: ?Y$val$?W
+factory_stats_3;Yesterday it produced ?Y$val$ $good$?W sold for ?Y$x$?W
 factory_stats_4;It made a profit of $val$ in the previous day
 factory_stats_5;Inputs availability:
 factory_stats_6;Efficiency inputs availability:
@@ -538,6 +567,7 @@ factory_stats_desired_income;Desired raw profit
 speed;$val$ kph
 shift_to_hold_open;Hold ?YSHIFT?! to keep this window open, ?YSHIFT-Right-click?! to build this in every state (but not expand)
 factory_upgrade_shortcuts;?YSHIFT-Left-click?W upgrade ?Gall?!S factories in a state\n?YSHIFT-Right-click?W upgrade ?Gall profitable?W factories in a state\n?YCTRL-Left-click?W upgrade ?Gall?W factories in a nation\n?YCTRL-Right-click?W upgrade ?Gall profitable?W factories in a nation\n?YCTRL-SHIFT-Left-click?W upgrade ?Gall profitable with full employment?W factories in a state\n?YCTRL-SHIFT-Right-click?W upgrade ?Gall profitable with full employment?W factories in a state
+factory_total_size;Total factories: ?Y$val$?!
 factory_consumer_count;Consumer factories: ?Y$val$?!
 factory_heavy_count;Heavy industry factories: ?Y$val$?!
 factory_military_count;Military factories: ?Y$val$?!
@@ -570,6 +600,7 @@ pop_mig_1;There is no internal migration from colonial provinces
 pop_mig_2;Slaves do not migrate internally
 pop_mig_3;The number of people that will migrate internally is equal to the size of the pop times the immigration scale ($x$) times the province's immigrant-push modifier ($y$) times the migration factor ($val$)
 pop_mig_4;?YMigration factor:
+pop_migration_bureaucracy;Bureaucracy has to move around in order to administer the land: $x$
 pop_cmig_1;The nation does not have any colonies
 pop_cmig_2;There is no colonial migration from colonial provinces
 pop_cmig_3;Slaves do not migrate colonially
@@ -648,7 +679,7 @@ pop_assim_2;Slaves do not assimilate
 pop_assim_3;Pops of an accepted culture do not assimilate
 pop_assim_4;Pops in colonial provinces do not assimilate
 pop_assim_5;Pops in overseas provinces do not assimilate
-pop_assim_6;Assimilation is proportional to the size of the pop times the product of:
+pop_assim_6;Assimilation is proportional to the size of the pop times the sum of base assimilation of microcultures $x$ and the product of:
 pop_assim_7;The base assimilation scale: $x$
 pop_assim_8;The national assimilation-rate modifier: $x$
 pop_assim_9;The local assimilation-rate modifier: $x$
@@ -841,6 +872,25 @@ rem_sphere_explain_2;The nation has a friendly opinion of you
 rem_sphere_explain_3;The nation is in your sphere of influence
 rem_sphere_explain_4;Removing a nation from your own sphere of influence will increase your infamy by ?R$x$
 rem_sphere_explain_5;Removing a nation from your own sphere of influence will reduce your prestige by ?R$x$
+ask_free_trade_agreement;Trade agreement
+revoke_trade_rights;Revoke trade rights
+msg_trade_rights_revoked;Nation ?Y$y$?W has revoked free trade rights of ?Y$x$?! in their country.
+trade_rights_desc;Trade rights or unequal treaties give the other party preferential treatment in trade ignoring tariffs of our country. Once imposed, cannot be revoked for ?Y$x$ years.
+revoke_trade_rights_explain_1;Enough time has passed since trade rights were imposed
+free_trade_desc;If another party agrees, we'll enter into trade agreement removing all tariffs between our nations for ?Y$x$ years?W.
+free_trade_explain_1;Our traders won't pay their tariffs until ?G$date$?!
+free_trade_explain_2;Their traders won't pay our tariffs until ?R$date$?!
+free_trade_explain_3;We are embargoeing them
+free_trade_explain_4;They are embargoing us
+issue_embargo;Issue Embargo
+lift_embargo;Lift Embargo
+embargo_desc;Embargo prevents all trade between our nations. Embargoes are applied automatically to enemies during war.
+embargo_explain_1;?G$x$ embargoes $y$.?!
+embargo_explain_2;?R$x$ embargoes $y$.?!
+embargo_explain_3;We don't have trade rights in their country
+embargo_explain_4;They don't have trade rights in our country
+embargo_explain_5;We aren't in a sphere
+embargo_explain_6;They aren't in a sphere
 fab_explain_1;You can't justify war against yourself
 fab_explain_2;You have at least $x$ diplomatic point(s)
 fab_explain_3;You are not currently fabricating a casus belli
@@ -1017,6 +1067,7 @@ tech_year_tt;?G$x$?! from the current year
 disband_all;Disband all selected units
 alice_play_checksum_host;Checksum mismatch with host, ensure you have the same mods and savefiles
 alice_play_save_stream;Host is streaming a save to you, wait until it completes
+alice_no_start_game_player_loading;Cannot start the game while players are loading
 ai_will_accept_po;They will accept this offer
 ai_will_not_accept_po;They will NOT accept this offer
 close_and_del;Close & Delete Factory
@@ -1071,7 +1122,9 @@ is_primary_religion;?Y$NAME$?! is the primary religion.
 tt_can_use_nation;The conditions needed to allow the use of this wargoal:
 et_on_add;The effects executed from adding this wargoal to a war:
 et_on_po_accepted;The effects executed from accepting a peace offer with this wargoal:
+alice_has_possible_units;Some unit can be built.
 alice_no_possible_units;No possible units can be built, and no units are in construction.
+CANBUILD_FORCEDISARM;Nation has not been disarmed.
 alice_debt_spending;Enable/disable debt spending
 alice_loan_size;Our current maximum loan is $x$. Debt greater than that will cause us to go bankrupt
 alice_loan_size_mod;Max loan free money modifier: ?G+$x$
@@ -1138,7 +1191,7 @@ CANCEL_WARSUBSIDIES_BUTTON;Cancel Subsidies;
 production_refit_factory_tooltip_1;Refit ?Y$what$?! to a different production line
 production_refit_factory_tooltip_2;Refit ?Y$what$?! into ?Y$name$?!
 production_refit_factory_tooltip_3;Ruling party allows building factories
-production_refit_factory_tooltip_4;Old and new types match in inputs or outputs
+production_refit_factory_tooltip_4;Old and new types have the same inputs or the same outputs
 factory_refit_cost;$what$: ?Y$val$?! (?Y$value$?!)
 factory_refit_cost_total;Total: ?Y$value$?!
 alice_budget_scaled_16;Diplomatic interest: ?G$value$
@@ -1157,6 +1210,10 @@ alice_spending_commodity_2;?R$cost$?W - Buying $need$ of $name$ (at $val$ x unit
 alice_recommended_build;?GThis factory is recommended to be built?W
 alice_factory_bonus;We will receive a ?Y$x$?W bonus if:
 alice_factory_inputs;Inputs required:
+alice_factory_construction_cost;Construction cost:
+alice_factory_construction_explain_3;Purchased goods worth: ?Y$x$?W
+alice_factory_construction_explain_4;Total estimated price: ?Y$x$?W
+alice_factory_construction_explain_5;Progress: ?Y$x$?W
 alice_factory_input_item;?R$cost$?W - Needs $need$ of $name$ ($val$)
 alice_factory_base_workforce;Base workforce ?Y$x$?W
 alice_factory_total_bonus;This sums to about ?Y$x$?W
@@ -1166,6 +1223,7 @@ explain_colonial_points;Secondary and Great Powers accumulate colonial points.
 alice_lobby_back;Back to lobby
 alice_lobby_back_tt_1;You're already in the fucking lobby
 alice_lobby_back_tt_2;Only the host may go back to lobby
+alice_lobby_back_player_loading;You may not go back to the lobby while players are loading
 reopen_with_tab;You can reopen this window with ?YTAB?W
 alice_topbar_tab_1;Open or close this tab
 alice_topbar_tab_2;Open or close the population tab
@@ -1285,8 +1343,10 @@ alice_pnt_dominant_religion;?YDominant religion:?! $x$
 alice_pnt_dominant_ideology;?YDominant Ideology:?! $x$
 ledger_ppp_gdp;GDP(PPP)
 ledger_ppp_gdp_per_capita;GDP(PPP) per 1m people
+ledger_inflation_adjusted_gdp;GDP(inflation-adjusted)
+ledger_inflation_adjusted_gdp_per_capita;GDP(inflation-adjusted) per 1m people
 ledger_standard_of_living;Standard of Living
-alice_ledger_header_gdp_history;GDP(PPP) over time
+alice_ledger_header_gdp_history;GDP(inflation-adjusted) over time
 alice_countryalert_colonialgood_start;You can colonize $region$
 alice_overseas_mil_description;Overseas militancy
 alice_armygroup_go_to_selection;Add/remove units
@@ -1338,7 +1398,7 @@ change_pname_to;Change $x$ party name to $text$
 change_rpname_to;Change ruling party name to $text$
 change_pposition_to;Change $x$ party position to $text$
 change_rpposition_to;Change ruling party position to $text$
-change_factory_limit_by;Change $good$ factory potential by $value$
+change_factory_limit_by;Change $good$ resource potential by $value$
 pname_is;$x$ party name
 rpname_is;ruling party name
 pposition_is;$x$ party position
@@ -1379,10 +1439,15 @@ transportaion_loss;Goods lost in transportation: ?Y$val$
 payment_per_unit;Buyer paid per unit: ?Y$val$
 payment_received_per_unit;Seller got per unit: ?Y$val$
 merchants_received_per_unit;Seller merchants profit per unit: ?Y$val$
+trade_route_volume_profit_score;Profit score: ?Y$val$?W (Profit ?Y$x$?W divided by import price ?Y$y$?W)
+trade_route_volume_base_change;Base expected change: ?Y$val$?W (Current volume ?Y$x$?W times profit score)
+trade_route_volume_expansion_multiplier;Expansion multiplier: ?Y$val$?W (Depends on actual access to commodity in exporting market)
+trade_route_volume_decay;Decay: ?Y$val$?W (Prevents trade volume from running too far away)
+trade_route_volume_final_change;Expected change: ?Y$val$
 investment_pool;Investment pool: ?Y$x$?W
 investment_pool_income_1;Population reinvestment: ?G$x$?W
-investment_pool_income_2;Transfer from subject $country$: ?G$x$W
-investment_pool_income_3;Government domestic investment: ?G$x$W
+investment_pool_income_2;Transfer from subject $country$: ?G$x$?W
+investment_pool_income_3;Government domestic investment: ?G$x$?W
 investment_pool_spending_1;"Incentives" spending: ?R$x$?W
 investment_pool_spending_2;Construction spending: ?R$x$?W
 investment_pool_spending_3;Transfer to subjects: ?R$x$?W
@@ -1507,4 +1572,18 @@ pop_emigration_attraction_2;The national modifier to immigrant attraction: $x$
 pop_emigration_attraction_3;And the migration target factor: $x$
 pop_migration_attraction_1;Migration attraction is the product of:
 pop_migration_attraction_2;The provincial modifier to immigrant attraction: $x$
-pop_migration_attraction_3;And the migration target factor: $x$
+pop_migration_attraction_3;The migration target factor: $x$
+pop_migration_attraction_wage_ratio;And the wage difference multipler: $x$
+pop_migration_attraction_bureaucracy;Bureaucracy base attraction: $x$
+alice_toggle_administration;Establish or abolish local administration. Administrations outside your control will not work. Consult administrative map mode to check existing administrations.
+administration_tile;Local administration
+market_tile;Local market
+alice_unit_target;===> $x$
+alice_lobby_resync;Resync lobby
+alice_lobby_resync_players_loading;Cannot resync when players are loading
+alice_lobby_resync_no_oos;No one is OOS
+alice_lobby_resync_not_host;Only the host may resync
+alice_host_has_resync;Host has resynced the lobby
+alice_naval_coordination_penalty;The $x$ are receiving a naval coordination penalty of ?R$y$?W from outnumbering their enemy, which reduces their target selection by ?R$val$?W
+alice_naval_coordination_bonus;The $x$ are receiving a naval coordination bonus of ?G$y$?W from being outnumbered, which increases their target selection by ?G$val$?W
+alice_naval_stacking_penalty;The $x$ are receiving a damage multiplier of ?R$y$?W from stacking penalties.

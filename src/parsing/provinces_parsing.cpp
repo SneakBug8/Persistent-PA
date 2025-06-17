@@ -89,6 +89,13 @@ void read_map_adjacency(char const* start, char const* end, error_handler& err, 
 					if(is_fixed_token_ci(ttex.data(), ttex.data() + ttex.length(), "sea")) {
 						auto new_rel = context.state.world.force_create_province_adjacency(province_id_a, province_id_b);
 						context.state.world.province_adjacency_set_type(new_rel, province::border::non_adjacent_bit);
+						// parse prov id of sea province to be blockaded to block adjacency
+						auto blockade_prov_text = parsers::remove_surrounding_whitespace(values[3]);
+						auto blockade_prov_value = parsers::parse_int(blockade_prov_text, 0, err);
+						if(blockade_prov_value > 0) {
+							auto blockadeable_prov = context.original_id_to_prov_id_map[blockade_prov_value];
+							context.state.world.province_adjacency_set_sea_adj_prov( new_rel, dcon::province_id{ blockadeable_prov });
+						}
 					} else if(is_fixed_token_ci(ttex.data(), ttex.data() + ttex.length(), "impassable")) {
 						auto new_rel = context.state.world.force_create_province_adjacency(province_id_a, province_id_b);
 						context.state.world.province_adjacency_set_type(new_rel, province::border::impassible_bit);
@@ -401,6 +408,10 @@ void province_history_file::state_building(pv_state_building const& value, error
 	if(value.id) {
 		auto new_fac = context.outer_context.state.world.create_factory();
 		auto base_size = 10'000.f;
+
+		assert(std::isfinite(value.level));
+		assert(value.level > 0);
+
 		context.outer_context.state.world.factory_set_building_type(new_fac, value.id);
 		context.outer_context.state.world.factory_set_size(new_fac, (float)value.level * base_size);
 		context.outer_context.state.world.factory_set_unqualified_employment(new_fac, base_size * 0.1f);
@@ -498,7 +509,7 @@ void province_factory_limit_desc::finish(province_file_context& context) {
 void province_factory_limit::entry(province_factory_limit_desc const& value, error_handler& err, int32_t line, province_file_context& context) {
 	if(value.trade_good_id) {
 		auto p = context.id;
-		context.outer_context.state.world.province_set_factory_max_size(p, value.trade_good_id, value.max_level_value / 10'000.f);
+		context.outer_context.state.world.province_set_factory_max_size(p, value.trade_good_id, value.max_level_value * 10'000.f);
 		context.outer_context.state.world.province_set_factory_limit_was_set_during_scenario_creation(p, true);
 	}
 }

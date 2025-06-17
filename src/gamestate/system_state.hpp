@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <atomic>
 #include <chrono>
+#include <semaphore>
 
 #include "window.hpp"
 #include "constants.hpp"
@@ -389,6 +390,7 @@ struct user_settings_s {
 	bool wasd_for_map_movement = false;
 	bool notify_rebels_defeat = true;
 	sys::color_blind_mode color_blind_mode = sys::color_blind_mode::none;
+	sys::graphics_mode graphics_mode = sys::graphics_mode::classic;
 	uint32_t UNUSED_UINT32_T = 0;
 	char locale[16] = "en-US";
 };
@@ -585,9 +587,6 @@ struct alignas(64) state {
 
 	ui::definitions ui_defs; // definitions for graphics and ui
 
-	std::vector<uint8_t> flag_type_map;   // flag_type remapper for saving space while also allowing mods to add flags not present in vanilla
-	std::vector<culture::flag_type> flag_types; // List of unique flag types
-
 	//
 	// persistent user settings
 	//
@@ -607,7 +606,7 @@ struct alignas(64) state {
 	sys::date current_date = sys::date{0};
 	sys::date ui_date = sys::date{0};
 	uint32_t game_seed = 0; // do *not* alter this value, ever
-	float inflation = 1.0f;
+	float inflation = 0.999f; // to compensate for some of money generation which will happen anyway
 	player_data player_data_cache;
 	std::vector<dcon::army_id> selected_armies;
 	std::vector<dcon::regiment_id> selected_regiments; // selected regiments inside the army
@@ -622,6 +621,10 @@ struct alignas(64) state {
 	//control groups
 	std::array<std::vector<dcon::army_id>, 10> ctrl_armies;
 	std::array<std::vector<dcon::navy_id>, 10> ctrl_navies;
+
+	// statistics
+	// variable for testing AI changes
+	// int pressed_wargoals = 0;
 
 	//army group
 	dcon::automated_army_group_id selected_army_group{};
@@ -650,6 +653,7 @@ struct alignas(64) state {
 	rigtorp::SPSCQueue<command::payload> incoming_commands;          // ui or network -> local gamestate
 	std::atomic<bool> ui_pause = false;                              // force pause by an important message being open
 	std::atomic<bool> railroad_built = true; // game state -> map
+	std::atomic<bool> sprawl_update_requested = true;
 	std::atomic<bool> update_trade_flow = true;
 	std::atomic<bool> ui_freeze = false;
 
@@ -704,6 +708,7 @@ struct alignas(64) state {
 	std::unique_ptr<fif::environment> fif_environment;
 	int32_t type_text_key = -1;
 	int32_t type_localized_key = -1;
+	std::mutex ui_lock; // lock for rendering the ui, when this is locked no rendering updates will occur
 
 	// the following functions will be invoked by the window subsystem
 
@@ -729,6 +734,8 @@ struct alignas(64) state {
 	// this function runs the internal logic of the game. It will return *only* after a quit notification is sent to it
 	void game_loop();
 	sys::checksum_key get_save_checksum();
+	sys::checksum_key get_mp_state_checksum(); // gets the checksum of the ENTIRE multiplayer state which is not strictly local
+	checksum_key get_scenario_checksum();
 	void debug_save_oos_dump();
 	void debug_scenario_oos_dump();
 
@@ -776,6 +783,7 @@ struct alignas(64) state {
 	void fill_unsaved_data();    // reconstructs derived values that are not directly saved after a save has been loaded
 	void on_scenario_load(); // called when the scenario file is loaded (not when saves are loaded)
 	void preload(); // clears data that will be later reconstructed from saved values
+	void reset_state();
 
 	void console_log(std::string_view message);
 	void log_player_nations();

@@ -427,6 +427,7 @@ public:
 		if(!utid)
 			return;
 		auto const& udef = state.military_definitions.unit_base_definitions[utid];
+		auto build_time_days = state.world.nation_get_unit_stats(state.local_player_nation, utid).build_time;
 		if(!content.continent) {
 			if(build_button) build_button->set_visible(state, true);
 			if(pop_size) pop_size->set_visible(state, true);
@@ -437,12 +438,13 @@ public:
 			for(auto ele : resource_cost_elements) {
 				ele->set_visible(state, false);
 			}
+			float factor = economy::build_cost_multiplier(state, content.province_info, false);
 			for(auto com : udef.build_cost.commodity_type) {
 				if(udef.build_cost.commodity_amounts[r] > 0.0f) {
 					if(r >= int16_t(resource_cost_elements.size()))
 						break;
 					resource_cost_elements[r]->good_frame = state.world.commodity_get_icon(com);
-					resource_cost_elements[r]->good_quantity = udef.build_cost.commodity_amounts[r] * (2.0f - state.world.nation_get_administrative_efficiency(state.local_player_nation));
+					resource_cost_elements[r]->good_quantity = udef.build_cost.commodity_amounts[r] * factor;
 					resource_cost_elements[r]->set_visible(state, true);
 					resource_cost_elements[r]->base_data.position.x = build_button->base_data.size.x - (resource_cost_elements[r]->base_data.size.x * (r + 1));
 					r++;
@@ -453,7 +455,7 @@ public:
 			if(unit_icon) unit_icon->frame = int32_t(udef.icon - 1);
 			//time_to_build
 			text::substitution_map m;
-			text::add_to_substitution_map(m, text::variable_type::x, udef.build_time);
+			text::add_to_substitution_map(m, text::variable_type::x, build_time_days);
 			if(build_time) build_time->set_text(state, text::resolve_string_substitution(state, "unit_build_time", m));
 			//popsize
 			if(content.is_navy) {
@@ -506,12 +508,13 @@ public:
 			for(auto ele : resource_cost_elements) {
 				ele->set_visible(state, false);
 			}
+			float factor = economy::build_cost_multiplier(state, content.province_info, false);
 			for(auto com : udef.build_cost.commodity_type) {
 				if(udef.build_cost.commodity_amounts[r] > 0.0f) {
 					if(r >= int16_t(resource_cost_elements.size()))
 						break;
 					resource_cost_elements[r]->good_frame = state.world.commodity_get_icon(com);
-					resource_cost_elements[r]->good_quantity = ((udef.build_cost.commodity_amounts[r] * (2.0f - state.world.nation_get_administrative_efficiency(state.local_player_nation))) * float(content.num_on_continent));
+					resource_cost_elements[r]->good_quantity = (udef.build_cost.commodity_amounts[r] * factor) * float(content.num_on_continent);
 					resource_cost_elements[r]->set_visible(state, true);
 					resource_cost_elements[r]->base_data.position.x = build_button->base_data.size.x - (resource_cost_elements[r]->base_data.size.x * (r + 1));
 					r++;

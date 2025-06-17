@@ -114,6 +114,7 @@ enum class command_type : uint8_t {
 	ask_for_free_trade_agreement = 105,
 	switch_embargo_status = 106,
 	revoke_trade_rights = 107,
+	toggle_local_administration = 108,
 
 	// network
 	notify_player_ban = 110,
@@ -130,6 +131,8 @@ enum class command_type : uint8_t {
 	advance_tick = 121,
 	chat_message = 122,
 	network_inactivity_ping = 123,
+	notify_player_fully_loaded = 124, // client sends this to the host to notify that they are fully loaded in, and host transmits it to all clients
+	notify_player_is_loading = 125, // host sends this to all clients to notify that a specific client has begun loading
 
 	// console cheats
 	network_populate = 254,
@@ -220,6 +223,10 @@ struct influence_priority_data {
 
 struct generic_location_data {
 	dcon::province_id prov;
+};
+
+struct generic_state_definition {
+	dcon::state_definition_id state_def;
 };
 
 struct cheat_location_data {
@@ -469,6 +476,7 @@ struct advance_tick_data {
 struct notify_joins_data {
 	sys::player_name player_name;
 	sys::player_password_raw player_password;
+	bool needs_loading;
 };
 struct notify_save_loaded_data {
 	sys::checksum_key checksum;
@@ -480,6 +488,12 @@ struct notify_reload_data {
 };
 struct notify_leaves_data {
 	bool make_ai;
+};
+struct notify_player_fully_loaded_data {
+	sys::player_name name;
+};
+struct notify_player_is_loading_data {
+	sys::player_name name;
 };
 
 struct payload {
@@ -498,6 +512,7 @@ struct payload {
 		influence_action_data influence_action;
 		influence_priority_data influence_priority;
 		generic_location_data generic_location;
+		generic_state_definition generic_state_definition;
 		war_target_data war_target;
 		movement_data movement;
 		political_party_data political_party;
@@ -540,6 +555,8 @@ struct payload {
 		save_game_data save_game;
 		notify_save_loaded_data notify_save_loaded;
 		notify_reload_data notify_reload;
+		notify_player_fully_loaded_data notify_player_fully_loaded;
+		notify_player_is_loading_data notify_player_is_loading;
 		cheat_location_data cheat_location;
 		notify_joins_data notify_join;
 		notify_leaves_data notify_leave;
@@ -591,6 +608,7 @@ bool can_start_naval_unit_construction(sys::state& state, dcon::nation_id source
 
 void start_land_unit_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::culture_id soldier_culture, dcon::unit_type_id type, dcon::province_id template_province = dcon::province_id{});
 bool can_start_land_unit_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::culture_id soldier_culture, dcon::unit_type_id type, dcon::province_id template_province = dcon::province_id{});
+void execute_start_land_unit_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::culture_id soldier_culture, dcon::unit_type_id type, dcon::province_id template_province = dcon::province_id{});
 
 void cancel_naval_unit_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::unit_type_id type);
 bool can_cancel_naval_unit_construction(sys::state& state, dcon::nation_id source, dcon::province_id location, dcon::unit_type_id type);
@@ -672,8 +690,9 @@ bool can_invest_in_colony(sys::state& state, dcon::nation_id source, dcon::provi
 void abandon_colony(sys::state& state, dcon::nation_id source, dcon::province_id p);
 bool can_abandon_colony(sys::state& state, dcon::nation_id source, dcon::province_id p);
 
-void finish_colonization(sys::state& state, dcon::nation_id source, dcon::province_id p);
-bool can_finish_colonization(sys::state& state, dcon::nation_id source, dcon::province_id p);
+void execute_finish_colonization(sys::state& state, dcon::nation_id source, dcon::state_definition_id d);
+void finish_colonization(sys::state& state, dcon::nation_id source, dcon::state_definition_id d);
+bool can_finish_colonization(sys::state& state, dcon::nation_id source, dcon::state_definition_id d);
 
 void intervene_in_war(sys::state& state, dcon::nation_id source, dcon::war_id w, bool for_attacker);
 bool can_intervene_in_war(sys::state& state, dcon::nation_id source, dcon::war_id w, bool for_attacker);
@@ -735,6 +754,8 @@ bool can_ask_for_free_trade_agreement(sys::state& state, dcon::nation_id asker, 
 
 void switch_embargo_status(sys::state& state, dcon::nation_id asker, dcon::nation_id target);
 bool can_switch_embargo_status(sys::state& state, dcon::nation_id asker, dcon::nation_id target, bool ignore_cost = false);
+// AI uses the function directly
+void execute_switch_embargo_status(sys::state& state, dcon::nation_id asker, dcon::nation_id target);
 
 void revoke_trade_rights(sys::state& state, dcon::nation_id source, dcon::nation_id target);
 bool can_revoke_trade_rights(sys::state& state, dcon::nation_id source, dcon::nation_id target, bool ignore_cost = false);
@@ -770,7 +791,7 @@ bool can_add_war_goal(sys::state& state, dcon::nation_id source, dcon::war_id w,
 void move_army(sys::state& state, dcon::nation_id source, dcon::army_id a, dcon::province_id dest, bool reset);
 std::vector<dcon::province_id> calculate_army_path(sys::state& state, dcon::nation_id source, dcon::army_id a, dcon::province_id last_province, dcon::province_id dest);
 
-std::vector<dcon::province_id> can_move_army(sys::state& state, dcon::nation_id source, dcon::army_id a, dcon::province_id dest);
+std::vector<dcon::province_id> can_move_army(sys::state& state, dcon::nation_id source, dcon::army_id a, dcon::province_id dest, bool reset = true);
 
 void move_navy(sys::state& state, dcon::nation_id source, dcon::navy_id n, dcon::province_id dest, bool reset);
 std::vector<dcon::province_id> calculate_navy_path(sys::state & state, dcon::nation_id source, dcon::navy_id n, dcon::province_id last_province, dcon::province_id dest);
@@ -852,6 +873,9 @@ void enable_debt(sys::state& state, dcon::nation_id source, bool debt_is_enabled
 void move_capital(sys::state& state, dcon::nation_id source, dcon::province_id p);
 bool can_move_capital(sys::state& state, dcon::nation_id source, dcon::province_id p);
 
+void toggle_local_administration(sys::state& state, dcon::nation_id source, dcon::province_id p);
+bool can_toggle_local_administration(sys::state& state, dcon::nation_id source, dcon::province_id p);
+
 void take_province(sys::state& state, dcon::nation_id source, dcon::province_id prov);
 bool can_take_province(sys::state& state, dcon::nation_id source, dcon::province_id p);
 void execute_take_province(sys::state& state, dcon::nation_id source, dcon::province_id p);
@@ -929,10 +953,13 @@ void notify_player_oos(sys::state& state, dcon::nation_id source);
 void notify_save_loaded(sys::state& state, dcon::nation_id source);
 void notify_reload(sys::state& state, dcon::nation_id source);
 void notify_start_game(sys::state& state, dcon::nation_id source);
+void notify_player_is_loading(sys::state& state, dcon::nation_id source, sys::player_name& name);
+void execute_notify_player_is_loading(sys::state& state, dcon::nation_id source, sys::player_name& name);
+void notify_player_fully_loaded(sys::state& state, dcon::nation_id source, sys::player_name& name);
 void notify_stop_game(sys::state& state, dcon::nation_id source);
 void notify_pause_game(sys::state& state, dcon::nation_id source);
-
-void execute_command(sys::state& state, payload& c);
+// returns true if the command was performed, false if not
+bool execute_command(sys::state& state, payload& c);
 void execute_pending_commands(sys::state& state);
 bool can_perform_command(sys::state& state, payload& c);
 

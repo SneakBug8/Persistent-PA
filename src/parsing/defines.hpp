@@ -663,6 +663,8 @@
 	LUA_DEFINES_LIST_ELEMENT(alice_speed_2, 750.000000)                                                                            \
 	LUA_DEFINES_LIST_ELEMENT(alice_speed_3, 250.000000)                                                                            \
 	LUA_DEFINES_LIST_ELEMENT(alice_speed_4, 125.000000)                                                                            \
+/* How much war exhaustion is the AI ready to take when declaring wars & peacing out */ \
+	LUA_DEFINES_LIST_ELEMENT(alice_ai_war_exhaustion_readiness_limit, 25.000000)                                                   \
 	LUA_DEFINES_LIST_ELEMENT(alice_ai_gather_radius, -0.996000)                                                                    \
 	LUA_DEFINES_LIST_ELEMENT(alice_ai_threat_radius, -0.996000)                                                                    \
 	LUA_DEFINES_LIST_ELEMENT(alice_ai_threat_overestimate, 1.150000)                                                               \
@@ -671,18 +673,18 @@
 	LUA_DEFINES_LIST_ELEMENT(alice_auto_hire_generals, 1.00000)                                                                   \
 	LUA_DEFINES_LIST_ELEMENT(alice_ai_offensive_strength_overestimate, 1.000000) \
 	LUA_DEFINES_LIST_ELEMENT(alice_military_score_leadership_factor, 1.000000) \
-	LUA_DEFINES_LIST_ELEMENT(alice_lf_needs_scale, 4.000000) \
-	LUA_DEFINES_LIST_ELEMENT(alice_ev_needs_scale, 1.500000) \
-	LUA_DEFINES_LIST_ELEMENT(alice_lx_needs_scale, 2.000000) \
+	LUA_DEFINES_LIST_ELEMENT(alice_lf_needs_scale, 1.000000) \
+	LUA_DEFINES_LIST_ELEMENT(alice_ev_needs_scale, 1.000000) \
+	LUA_DEFINES_LIST_ELEMENT(alice_lx_needs_scale, 1.000000) \
 	LUA_DEFINES_LIST_ELEMENT(alice_max_event_iterations, 8.000000) \
 	LUA_DEFINES_LIST_ELEMENT(alice_needs_scaling_factor, 400000.000000) \
 	LUA_DEFINES_LIST_ELEMENT(alice_factory_per_level_employment, 10000.0) \
 	LUA_DEFINES_LIST_ELEMENT(alice_domestic_investment_multiplier, 50.0) \
-	LUA_DEFINES_LIST_ELEMENT(alice_rgo_boost, 7.5) \
+	LUA_DEFINES_LIST_ELEMENT(alice_rgo_boost, 2.0) \
 	LUA_DEFINES_LIST_ELEMENT(alice_base_rgo_employment_bonus, 5000.0) \
-	LUA_DEFINES_LIST_ELEMENT(alice_base_rgo_efficiency_bonus, 7.50) \
-	LUA_DEFINES_LIST_ELEMENT(alice_inputs_base_factor_artisans, 1.05) \
-	LUA_DEFINES_LIST_ELEMENT(alice_output_base_factor_artisans, 0.95) \
+	LUA_DEFINES_LIST_ELEMENT(alice_base_rgo_efficiency_bonus, 2.00) \
+	LUA_DEFINES_LIST_ELEMENT(alice_inputs_base_factor_artisans, 1.01) \
+	LUA_DEFINES_LIST_ELEMENT(alice_output_base_factor_artisans, 0.99) \
 	LUA_DEFINES_LIST_ELEMENT(alice_inputs_base_factor, 1.0) \
 	LUA_DEFINES_LIST_ELEMENT(alice_rgo_overhire_multiplier, 10.0) \
 	LUA_DEFINES_LIST_ELEMENT(alice_rgo_production_scale_neg_delta, 0.001) \
@@ -738,11 +740,17 @@
 	LUA_DEFINES_LIST_ELEMENT(alice_leadership_generation_divisor, 2.0) \
 	LUA_DEFINES_LIST_ELEMENT(alice_battle_won_score_to_leadership, 10.0) \
 	LUA_DEFINES_LIST_ELEMENT(alice_battle_lost_score_to_leadership, 20.0) \
-	LUA_DEFINES_LIST_ELEMENT(alice_disable_price_control, 0.0) \
-	LUA_DEFINES_LIST_ELEMENT(alice_disallow_factories_in_colonies, 1.0) \
 	LUA_DEFINES_LIST_ELEMENT(alice_naval_base_to_colonial_distance_factor, 0.04) \
+	LUA_DEFINES_LIST_ELEMENT(alice_allow_factories_in_colonies, 0.0) \
 	LUA_DEFINES_LIST_ELEMENT(alice_always_available_cbs_zero_infamy, 1.0) \
-
+	LUA_DEFINES_LIST_ELEMENT(alice_naval_unit_build_time_mult, 1.0) \
+	LUA_DEFINES_LIST_ELEMENT(alice_land_unit_build_time_mult, 1.0) \
+	LUA_DEFINES_LIST_ELEMENT(alice_province_building_build_time_mult, 0.1) \
+	LUA_DEFINES_LIST_ELEMENT(alice_factory_build_time_mult, 0.1) \
+	LUA_DEFINES_LIST_ELEMENT(alice_naval_combat_enemy_stacking_target_select_bonus, 0.5) \
+	LUA_DEFINES_LIST_ELEMENT(alice_naval_combat_stacking_damage_penalty, 0.5) \
+	LUA_DEFINES_LIST_ELEMENT(alice_economy_market_stockpile_spoilage, 0.05) \
+	LUA_DEFINES_LIST_ELEMENT(alice_globe_mean_radius_km, 6371.0) \
 
 // scales the needs values so that they are needs per this many pops
 // this value was arrived at by looking at farmers: 40'000 farmers produces enough grain to satisfy about 2/3

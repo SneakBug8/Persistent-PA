@@ -330,7 +330,7 @@ uint32_t es_x_neighbor_province_scope_nation(EFFECT_DISPLAY_PARAMS) {
 
 			if(rlist.size() != 0) {
 				auto r = rng::get_random(ws, r_hi, r_lo) % rlist.size();
-				
+
 				show_full_random_tooltip(ws, tval[0], "neighboring_province", layout, rlist[r], indentation);
 				show_limit(ws, tval, layout, -1, this_slot, from_slot, indentation);
 				return 1 + display_subeffects(ws, tval, layout, trigger::to_generic(rlist[r]), this_slot, from_slot, r_hi, r_lo + 1, indentation + indentation_amount);
@@ -418,7 +418,7 @@ uint32_t es_x_neighbor_country_scope(EFFECT_DISPLAY_PARAMS) {
 			return 0;
 		}
 	}
-	
+
 	show_short_any_random_tooltip(ws, tval[0], "neighboring_nation", layout, indentation);
 	show_limit(ws, tval, layout, -1, this_slot, from_slot, indentation);
 	return ((tval[0] & effect::is_random_scope) != 0 ? 1 : 0) + display_subeffects(ws, tval, layout, -1, this_slot, from_slot, r_lo,
@@ -3095,7 +3095,7 @@ uint32_t ef_remove_country_modifier(EFFECT_DISPLAY_PARAMS) {
 			modifier_description(ws, layout, trigger::payload(tval[1]).mod_id, indentation + indentation_amount);
 		}
 	}
-	
+
 	return 0;
 }
 uint32_t ef_create_alliance(EFFECT_DISPLAY_PARAMS) {

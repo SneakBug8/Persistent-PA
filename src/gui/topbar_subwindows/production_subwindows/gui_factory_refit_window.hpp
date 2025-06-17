@@ -91,9 +91,8 @@ public:
 		bool state_is_not_colonial = !state.world.province_get_is_colonial(state.world.state_instance_get_capital(sid));
 		text::add_line_with_condition(state, contents, "factory_upgrade_condition_2", state_is_not_colonial);
 
-		bool is_activated = state.world.nation_get_active_building(n, type) == true || state.world.factory_type_get_is_available_from_start(type);
+		bool is_activated = state.world.nation_get_active_building(n, type) || state.world.factory_type_get_is_available_from_start(type);
 		text::add_line_with_condition(state, contents, "factory_upgrade_condition_3", is_activated);
-
 
 		text::add_line_with_condition(state, contents, "factory_upgrade_condition_9", is_not_upgrading);
 	}
@@ -151,14 +150,15 @@ public:
 
 		text::add_line_break_to_layout(state, contents);
 
-		auto refit_cost = economy::calculate_factory_refit_goods_cost(state, state.local_player_nation, fat.get_factory_location().get_province().get_state_membership(), type, refit_target);
+		auto refit_cost = economy::calculate_factory_refit_goods_cost(state, state.local_player_nation, fat.get_factory_location().get_province(), type, refit_target);
 		auto total = 0.f;
 		for(uint32_t i = 0; i < economy::commodity_set::set_size; ++i) {
 			if(refit_cost.commodity_type[i] && refit_cost.commodity_amounts[i] > 0) {
-				float admin_eff = state.world.nation_get_administrative_efficiency(n);
-				float admin_cost_factor = 2.0f - admin_eff;
-				float factory_mod = state.world.nation_get_modifier_values(n, sys::national_mod_offsets::factory_cost) + 1.0f;
-				auto price = economy::price(state, pid.get_state_membership(), refit_cost.commodity_type[i]) * refit_cost.commodity_amounts[i] * factory_mod * admin_cost_factor;
+				float factor = economy::factory_build_cost_multiplier(state, n, fat.get_province_from_factory_location(), false);
+				auto price =
+					economy::price(state, pid.get_state_membership(), refit_cost.commodity_type[i])
+					* refit_cost.commodity_amounts[i]
+					* factor;
 				total += price;
 
 				text::add_line(state, contents, "factory_refit_cost", text::variable_type::what, state.world.commodity_get_name(refit_cost.commodity_type[i]), text::variable_type::val, text::fp_three_places{ refit_cost.commodity_amounts[i] }, text::variable_type::value, text::format_money(price));
@@ -175,33 +175,45 @@ public:
 		bool state_is_not_colonial = !state.world.province_get_is_colonial(state.world.state_instance_get_capital(pid.get_state_membership()));
 		text::add_line_with_condition(state, contents, "factory_upgrade_condition_2", state_is_not_colonial);
 
-		bool is_activated = state.world.nation_get_active_building(n, refit_target) == true || state.world.factory_type_get_is_available_from_start(refit_target);
+		bool is_activated = state.world.nation_get_active_building(n, refit_target) || state.world.factory_type_get_is_available_from_start(refit_target);
 		text::add_line_with_condition(state, contents, "factory_upgrade_condition_3", is_activated);
 
 		text::add_line_with_condition(state, contents, "factory_upgrade_condition_9", is_not_upgrading);
 
-		auto rules = state.world.nation_get_combined_issue_rules(state.local_player_nation);
-		text::add_line_with_condition(state, contents, "OR", (rules & issue_rule::build_factory) != 0, 5);
-		text::add_line_with_condition(state, contents, "production_refit_factory_tooltip_3", (rules & issue_rule::build_factory) != 0, 15);
+		/*
+		OR:
+		- Ruling party allows building factories
+		- Old and new types match in inputs or outputs
+		*/
+		{
+			auto rules = state.world.nation_get_combined_issue_rules(state.local_player_nation);
+			auto cond_1 = (rules & issue_rule::build_factory) != 0;
 
-		// For capitalist economies, refit factories must match in output good or inputs.
-		auto output_1 = state.world.factory_type_get_output(type);
-		auto output_2 = state.world.factory_type_get_output(refit_target);
-		auto inputs_1 = state.world.factory_type_get_inputs(type);
-		auto inputs_2 = state.world.factory_type_get_inputs(refit_target);
-		auto inputs_match = true;
+			/* For capitalist economies, refit factories must match in output good or inputs.
+			In vanilla, for example, paper mill into lumber mill.
+			Primarily useful for mods where are several factory options for one production chain.
+			*/
+			auto output_1 = state.world.factory_type_get_output(type);
+			auto output_2 = state.world.factory_type_get_output(refit_target);
+			auto inputs_1 = state.world.factory_type_get_inputs(type);
+			auto inputs_2 = state.world.factory_type_get_inputs(refit_target);
+			auto inputs_match = true;
 
-		for(uint32_t i = 0; i < economy::commodity_set::set_size; ++i) {
-			auto input_1 = inputs_1.commodity_type[i];
-			auto input_2 = inputs_2.commodity_type[i];
+			for(uint32_t i = 0; i < economy::commodity_set::set_size; ++i) {
+				auto input_1 = inputs_1.commodity_type[i];
+				auto input_2 = inputs_2.commodity_type[i];
 
-			if(input_1 != input_2) {
-				inputs_match = false;
-				break;
+				if(input_1 != input_2) {
+					inputs_match = false;
+					break;
+				}
 			}
-		}
 
-		text::add_line_with_condition(state, contents, "production_refit_factory_tooltip_4", output_1 == output_2 || inputs_match, 15);
+			auto cond_2 = output_1 == output_2 || inputs_match;
+			text::add_line_with_condition(state, contents, "OR", cond_1 || cond_2);
+			text::add_line_with_condition(state, contents, "production_refit_factory_tooltip_3", cond_1, 15);
+			text::add_line_with_condition(state, contents, "production_refit_factory_tooltip_4", cond_2, 15);
+		}
 	}
 };
 
