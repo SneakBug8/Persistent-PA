@@ -48,7 +48,7 @@
 #include "game_scene.cpp"
 #include "SHA512.cpp"
 #include "commands.cpp"
-#include "network.cpp"
+#include "turn_based.cpp"
 #include "diplomatic_messages.cpp"
 #include "notifications.cpp"
 #include "map_tooltip.cpp"
